@@ -203,6 +203,10 @@ cython_debug/
 # Temporary file for partial code execution
 tempCodeRunnerFile.py
 
+# WeChat Mini Game
+*.local
+WeChatDevTools/
+
 # Ruff stuff:
 .ruff_cache/
 

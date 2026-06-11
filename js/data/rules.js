@@ -1,0 +1,68 @@
+export const RULES = [
+  {
+    id: 0,
+    name: '8点前起床',
+    short: '早起',
+    desc: '保证每日睡眠不少于6小时，作息规律，可根据自身情况灵活调整。',
+    stat: 'wil',
+    icon: 'sun',
+  },
+  {
+    id: 1,
+    name: '完成晨间流程',
+    short: '晨间',
+    desc: '留出一小时不受外界干扰，远离手机与社交软件。',
+    stat: 'spi',
+    icon: 'leaf',
+  },
+  {
+    id: 2,
+    name: '每日运动一小时',
+    short: '运动',
+    desc: '根据自身体能选择运动方式，散步、拉伸、跑步、瑜伽等均可。',
+    stat: 'str',
+    icon: 'sword',
+  },
+  {
+    id: 3,
+    name: '每日阅读10页',
+    short: '阅读',
+    desc: '阅读励志、心理学、商业类或各类知识性书籍。',
+    stat: 'int',
+    icon: 'book',
+  },
+  {
+    id: 4,
+    name: '学习新技能一小时',
+    short: '技能',
+    desc: '挑战开始前提前规划目标与想要学习的技能。',
+    stat: 'skl',
+    icon: 'gear',
+  },
+  {
+    id: 5,
+    name: '坚持健康饮食',
+    short: '饮食',
+    desc: '戒酒、不喝碳酸饮料、减少糖分摄入，保证充足饮水。',
+    stat: 'vit',
+    icon: 'heart',
+  },
+  {
+    id: 6,
+    name: '记录手账进度',
+    short: '手账',
+    desc: '记录当日得失、所学感悟以及可以改进的地方。',
+    stat: 'mnd',
+    icon: 'pen',
+  },
+];
+
+export const STAT_LABELS = {
+  wil: '意志',
+  spi: '灵力',
+  str: '力量',
+  int: '智慧',
+  skl: '技巧',
+  vit: '活力',
+  mnd: '心境',
+};

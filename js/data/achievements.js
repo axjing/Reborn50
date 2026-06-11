@@ -1,0 +1,16 @@
+export const ACHIEVEMENTS = [
+  { id: 'first_step', name: '第一步', desc: '完成第一天挑战', check: s => s.completedDays >= 1 },
+  { id: 'week_1', name: '初露锋芒', desc: '连续完成7天', check: s => s.streak >= 7 },
+  { id: 'week_2', name: '渐入佳境', desc: '连续完成14天', check: s => s.streak >= 14 },
+  { id: 'week_3', name: '势不可挡', desc: '连续完成21天', check: s => s.streak >= 21 },
+  { id: 'halfway', name: '半程勇士', desc: '连续完成25天', check: s => s.streak >= 25 },
+  { id: 'never_give_up', name: '永不言弃', desc: '重置后重新达到10天', check: s => s.totalResets >= 1 && s.streak >= 10 },
+  { id: 'reborn', name: '重生', desc: '完成50天挑战', check: s => s.completedDays >= 50 },
+  { id: 'boss_7', name: '击败怠惰', desc: '击败怠惰史莱姆', check: s => s.defeatedBosses.includes(7) },
+  { id: 'boss_14', name: '战胜拖延', desc: '击败拖延蛇', check: s => s.defeatedBosses.includes(14) },
+  { id: 'boss_21', name: '抵御诱惑', desc: '击败诱惑魔女', check: s => s.defeatedBosses.includes(21) },
+  { id: 'boss_28', name: '超越安逸', desc: '击败安逸巨人', check: s => s.defeatedBosses.includes(28) },
+  { id: 'boss_35', name: '拒绝放弃', desc: '击败放弃之龙', check: s => s.defeatedBosses.includes(35) },
+  { id: 'boss_42', name: '征服混沌', desc: '击败混沌领主', check: s => s.defeatedBosses.includes(42) },
+  { id: 'boss_50', name: '超越自我', desc: '击败旧我', check: s => s.defeatedBosses.includes(50) },
+];
