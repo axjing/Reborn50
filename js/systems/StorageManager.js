@@ -4,7 +4,7 @@ import { ACHIEVEMENTS } from '../data/achievements.js';
 
 export class StorageManager {
   static save(player) {
-    const data = {
+    var data = {
       version: SAVE_VERSION,
       timestamp: Date.now(),
       player: player.toJSON(),
@@ -15,7 +15,7 @@ export class StorageManager {
 
   static load() {
     try {
-      const raw = wx.getStorageSync(STORAGE_KEY);
+      var raw = wx.getStorageSync(STORAGE_KEY);
       if (!raw) return null;
       if (raw.version !== SAVE_VERSION) {
         return _migrate(raw);
@@ -27,33 +27,31 @@ export class StorageManager {
   }
 
   static checkNewDay(player) {
-    const raw = wx.getStorageSync(STORAGE_KEY);
+    var raw = wx.getStorageSync(STORAGE_KEY);
     if (!raw) return false;
-    const lastDate = raw.lastActiveDate;
-    const today = _todayStr();
+    var lastDate = raw.lastActiveDate;
+    var today = _todayStr();
     if (lastDate !== today) {
       player.completedToday = false;
-      if (player.completedRules.length === 0) {
-        StorageManager.save(player);
-      } else if (player.isAllRulesDone()) {
-        player.completedRules = [];
-        StorageManager.save(player);
-      } else {
-        player.resetDay();
-        StorageManager.save(player);
-        return true;
-      }
+      player.completedRules = [];
+      StorageManager.save(player);
+      return true;
     }
     return false;
   }
 
   static checkAchievements(player) {
-    const unlocked = [];
-    ACHIEVEMENTS.forEach(a => {
-      if (a.check(player)) {
+    var unlocked = [];
+    for (var i = 0; i < ACHIEVEMENTS.length; i++) {
+      var a = ACHIEVEMENTS[i];
+      if (!player.achievements.includes(a.id) && a.check(player)) {
         unlocked.push(a);
+        player.achievements.push(a.id);
       }
-    });
+    }
+    if (unlocked.length > 0) {
+      StorageManager.save(player);
+    }
     return unlocked;
   }
 
@@ -71,14 +69,21 @@ export class StorageManager {
 }
 
 function _todayStr() {
-  const d = new Date();
-  return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
+  var d = new Date();
+  return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate();
 }
 
 function _migrate(raw) {
-  if (raw.version === 1 && raw.player) {
-    const p = raw.player;
-    p.history = p.history || [];
+  if (raw.version === 2 && raw.player) {
+    var p = raw.player;
+    p.achievements = p.achievements || [];
+    p.adventures = p.adventures || [];
+    p.chapterProgress = p.chapterProgress || 1;
+    p.storyWatched = p.storyWatched || [];
+    p.stars = p.stars || 0;
+    p.totalStars = p.totalStars || 0;
+    p.nickname = p.nickname || '修行者';
+    p.avatar = p.avatar || '';
     return new Player(p);
   }
   return null;

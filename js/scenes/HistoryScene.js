@@ -1,97 +1,116 @@
-import { STATUS, TOTAL_DAYS } from '../utils/constants.js';
-import { C, drawBg, drawCard, roundRect, fs, drawBtn } from '../utils/color.js';
+import { STATUS, TOTAL_DAYS, STAT_LABELS } from '../utils/constants.js';
+import { C, drawBg, drawCard, roundRect, fs, drawInkBtn, drawMist } from '../utils/color.js';
 
 export class HistoryScene {
   constructor(sm) {
     this.sm = sm;
     this.player = null;
-    this.recs = [];
+    this._records = [];
+    this._timer = 0;
   }
 
   onEnter(data) {
     this.player = data.player;
-    this.recs = (this.player.history || []).slice().reverse().slice(0, 20);
+    this._records = (this.player.history || []).slice().reverse();
+    this._timer = 0;
   }
 
-  update() {}
+  update(dt) {
+    this._timer += dt;
+  }
 
   render(ctx) {
     var w = ctx.canvas.width;
     var h = ctx.canvas.height;
     drawBg(ctx, w, h);
-
-    ctx.fillStyle = C.red;
-    ctx.font = 'bold ' + fs(w, 20) + 'px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'top';
-    ctx.fillText('挑战记录', w / 2, 14);
-
-    ctx.fillStyle = C.inkLight;
-    ctx.font = fs(w, 12) + 'px sans-serif';
-    ctx.fillText('已完成 ' + this.player.completedDays + '/' + TOTAL_DAYS + ' 天  重置 ' + this.player.totalResets + ' 次', w / 2, 44);
+    drawMist(ctx, w, h, this._timer * 0.3);
 
     ctx.save();
-    roundRect(ctx, 0, 68, w, h - 136, 0);
+    ctx.globalAlpha = 0.92;
+    drawCard(ctx, 8, 6, w - 16, h - 12, 12);
+    ctx.restore();
+
+    ctx.fillStyle = C.ink;
+    ctx.font = 'bold ' + fs(w, 18) + 'px "SimSun", "KaiTi", serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    ctx.fillText('修行手账', w / 2, 16);
+
+    ctx.fillStyle = C.inkLight;
+    ctx.font = fs(w, 11) + 'px "SimSun", "KaiTi", serif';
+    ctx.fillText('已完成 ' + this.player.completedDays + '/' + TOTAL_DAYS + ' 天  |  连击 ' + this.player.streak + ' 天', w / 2, 40);
+
+    ctx.save();
+    roundRect(ctx, 12, 58, w - 24, h - 122, 0);
     ctx.clip();
 
-    if (this.recs.length === 0) {
+    if (this._records.length === 0) {
       ctx.fillStyle = C.inkMuted;
-      ctx.font = fs(w, 14) + 'px sans-serif';
+      ctx.font = fs(w, 14) + 'px "SimSun", "KaiTi", serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText('暂无记录，开始你的重生之旅', w / 2, h / 2);
+      ctx.fillText('暂无修行记录', w / 2, h / 2);
     } else {
-      for (var i = 0; i < this.recs.length; i++) {
-        var r = this.recs[i];
-        var y = 76 + i * 60;
-        var rh = 50;
-        if (y + rh < 68 || y > h - 68) continue;
+      for (var i = 0; i < Math.min(this._records.length, 50); i++) {
+        var r = this._records[i];
+        var y = 66 + i * 52;
+        var rh = 44;
+        if (y + rh < 58 || y > h - 64) continue;
 
         var fail = r.failed;
-        drawCard(ctx, 12, y, w - 24, rh, 8);
+        roundRect(ctx, 16, y, w - 32, rh, 6);
+        ctx.fillStyle = fail ? 'rgba(194,53,49,0.05)' : C.white;
+        ctx.fill();
+        ctx.strokeStyle = fail ? C.redLight : C.inkMuted;
+        ctx.lineWidth = 0.5;
+        roundRect(ctx, 16, y, w - 32, rh, 6);
+        ctx.stroke();
 
         ctx.fillStyle = fail ? C.red : C.ink;
-        ctx.font = 'bold ' + fs(w, 13) + 'px sans-serif';
+        ctx.font = 'bold ' + fs(w, 13) + 'px "SimSun", "KaiTi", serif';
         ctx.textAlign = 'left';
         ctx.textBaseline = 'top';
-        ctx.fillText('Day ' + r.day, 24, y + 5);
+        ctx.fillText('第 ' + r.day + ' 天', 26, y + 4);
 
         if (r.timestamp) {
           ctx.fillStyle = C.inkMuted;
-          ctx.font = fs(w, 9) + 'px sans-serif';
-          ctx.fillText(new Date(r.timestamp).toLocaleDateString('zh-CN'), 24, y + 25);
+          ctx.font = fs(w, 8) + 'px sans-serif';
+          ctx.fillText(new Date(r.timestamp).toLocaleDateString('zh-CN'), 26, y + 24);
         }
 
         if (fail) {
           ctx.fillStyle = C.red;
-          ctx.font = fs(w, 12) + 'px sans-serif';
+          ctx.font = fs(w, 11) + 'px "SimSun", "KaiTi", serif';
           ctx.textAlign = 'right';
           ctx.textBaseline = 'top';
-          ctx.fillText('失败', w - 24, y + 10);
+          ctx.fillText('未完成', w - 26, y + 8);
         } else {
-          ctx.fillStyle = C.jade;
+          var starStr = '';
+          var sc = r.stars || 0;
+          for (var s = 0; s < 3; s++) { starStr += s < sc ? '★' : '☆'; }
+          ctx.fillStyle = C.gold;
           ctx.font = fs(w, 12) + 'px sans-serif';
           ctx.textAlign = 'right';
           ctx.textBaseline = 'top';
-          var rd = (r.completedRules || []).length;
-          ctx.fillText(rd + '/7 完成', w - 24, y + 10);
-          ctx.fillStyle = C.inkMuted;
-          ctx.font = fs(w, 9) + 'px sans-serif';
-          ctx.fillText('连击 ' + (r.streak || 0) + ' 天', w - 24, y + 26);
+          ctx.fillText(starStr, w - 26, y + 4);
+
+          ctx.fillStyle = C.jade;
+          ctx.font = fs(w, 10) + 'px sans-serif';
+          ctx.fillText('连击 ' + (r.streak || 0) + ' 天', w - 26, y + 24);
         }
       }
     }
+
     ctx.restore();
 
-    drawBtn(ctx, (w - 120) / 2, h - 56, 120, 38, '返回', C.gold);
+    drawInkBtn(ctx, (w - 100) / 2, h - 50, 100, 36, '返回', C.inkMuted);
   }
 
   handleTap(x, y) {
     var w = this.sm.canvas.width;
     var h = this.sm.canvas.height;
-    var bx = (w - 120) / 2;
-    if (x >= bx && x <= bx + 120 && y >= h - 56 && y <= h - 56 + 38) {
-      this.sm.switchTo(STATUS.HOME, { player: this.player });
+    if (x >= (w - 100) / 2 && x <= (w - 100) / 2 + 100 && y >= h - 50 && y <= h - 14) {
+      this.sm.transitionTo(STATUS.HOME, { player: this.player });
     }
   }
 }

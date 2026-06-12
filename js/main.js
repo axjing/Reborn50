@@ -7,40 +7,45 @@ import { BootScene } from './scenes/BootScene.js';
 import { TitleScene } from './scenes/TitleScene.js';
 import { HomeScene } from './scenes/HomeScene.js';
 import { ChallengeScene } from './scenes/ChallengeScene.js';
-import { BattleScene } from './scenes/BattleScene.js';
-import { BossScene } from './scenes/BossScene.js';
-import { GameOverScene } from './scenes/GameOverScene.js';
+import { StoryScene } from './scenes/StoryScene.js';
+import { AdventureScene } from './scenes/AdventureScene.js';
+import { RealmScene } from './scenes/RealmScene.js';
+import { MiniGameScene } from './scenes/MiniGameScene.js';
 import { HistoryScene } from './scenes/HistoryScene.js';
 
-const canvas = wx.createCanvas();
-const systemInfo = wx.getSystemInfoSync();
+var canvas = wx.createCanvas();
+var systemInfo = wx.getSystemInfoSync();
 
 canvas.width = systemInfo.windowWidth;
 canvas.height = systemInfo.windowHeight;
 
-const sceneManager = new SceneManager();
-sceneManager.init(canvas);
+var audio = new AudioManager();
+audio.init();
 
-const scenes = {
+var sceneManager = new SceneManager();
+sceneManager.init(canvas);
+sceneManager.audio = audio;
+
+var scenes = {
   [STATUS.BOOT]: BootScene,
   [STATUS.TITLE]: TitleScene,
   [STATUS.HOME]: HomeScene,
-  [STATUS.CHALLENGE]: ChallengeScene,
-  [STATUS.BATTLE]: BattleScene,
-  [STATUS.BOSS]: BossScene,
-  [STATUS.GAME_OVER]: GameOverScene,
+  [STATUS.CULTIVATION]: ChallengeScene,
+  [STATUS.STORY]: StoryScene,
+  [STATUS.ADVENTURE]: AdventureScene,
+  [STATUS.REALM]: RealmScene,
+  [STATUS.MINIGAME]: MiniGameScene,
   [STATUS.HISTORY]: HistoryScene,
 };
 
-Object.entries(scenes).forEach(([status, SceneClass]) => {
+Object.entries(scenes).forEach(function(_a) {
+  var status = _a[0];
+  var SceneClass = _a[1];
   sceneManager.register(status, new SceneClass(sceneManager));
 });
 
-const audio = new AudioManager();
-audio.init();
-
 new InputManager(sceneManager);
 
-const gameLoop = new GameLoop(sceneManager);
+var gameLoop = new GameLoop(sceneManager);
 sceneManager.switchTo(STATUS.BOOT);
 gameLoop.start();
