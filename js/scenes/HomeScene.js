@@ -692,7 +692,8 @@ export class HomeScene {
   }
 
   _drawCalendarGrid(ctx, w, p) {
-    var startY = (this._todoMetrics ? this._todoMetrics.todoEnd : 240) + 6;
+    var m = this._todoMetrics;
+    var startY = (m ? m.todoEnd : 240) + 6;
     var h = this.sm.canvas.height;
     var navY = h - 60;
     var availH = navY - startY - 8;
@@ -701,9 +702,73 @@ export class HomeScene {
     var cols = 7;
     var rows = Math.ceil(TOTAL_DAYS / cols);
     var gap = 1.5;
-    var cellSize = Math.floor(Math.min((w - 32 - gap * (cols - 1)) / cols, 36, (availH - 20) / rows - gap));
+    var titleH = 14;
+    var headerH = 12;
+    var overhead = titleH + 6 + headerH;
+    var cellSize = Math.floor(Math.min((w - 32 - gap * (cols - 1)) / cols, 36, (availH - overhead - 6) / rows - gap));
     var totalW = cols * cellSize + (cols - 1) * gap;
     var ox = (w - totalW) / 2;
+    var todoX = m ? m.todoX : ox;
+    var titleY = startY;
+
+    // "修行日历" title aligned with todo title
+    ctx.fillStyle = C.songInk;
+    ctx.font = getFont(w, 13, 'song');
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    ctx.fillText('修行日历', todoX + 12, titleY);
+
+    // Right-aligned day counter
+    ctx.fillStyle = C.songInkLight;
+    ctx.font = getFont(w, 8, 'sans');
+    ctx.textAlign = 'right';
+    ctx.fillText(p.completedDays + '/' + TOTAL_DAYS + '天', todoX + (m ? m.todoW : totalW + 12) - 12, titleY + 2);
+
+    // Subtle underline for title
+    ctx.save();
+    ctx.strokeStyle = 'rgba(60,45,30,0.06)';
+    ctx.lineWidth = 0.5;
+    ctx.beginPath();
+    ctx.moveTo(todoX + 12, titleY + 18);
+    ctx.lineTo(todoX + 80, titleY + 18);
+    ctx.stroke();
+    ctx.restore();
+
+    var headerY = titleY + titleH + 6;
+
+    // Weekday headers with subtle rounded pill
+    for (var d = 0; d < cols; d++) {
+      var hx = ox + d * (cellSize + gap) + cellSize / 2;
+      var hw = cellSize - 6;
+      var hr = 4;
+      roundRect(ctx, hx - hw / 2, headerY + 1, hw, headerH - 2, hr);
+      ctx.fillStyle = 'rgba(60,45,30,0.03)';
+      ctx.fill();
+
+      ctx.fillStyle = (d === 0 || d === 6) ? C.songMutedRed : C.songInkLight;
+      ctx.font = getFont(w, 7, 'sans');
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(WEEKDAYS[d], hx, headerY + headerH / 2);
+    }
+
+    var gridY = headerY + headerH + 1;
+    var clipH = rows * (cellSize + gap);
+    ctx.save();
+    ctx.beginPath();
+    roundRect(ctx, ox - 2, gridY - 2, totalW + 4, clipH + 4, 4);
+    ctx.clip();
+
+    // Weekly horizontal dividers (subtle)
+    for (var wk = 0; wk <= rows; wk++) {
+      var wy = gridY + wk * (cellSize + gap) - gap / 2;
+      ctx.strokeStyle = 'rgba(60,45,30,0.04)';
+      ctx.lineWidth = 0.3;
+      ctx.beginPath();
+      ctx.moveTo(ox + 4, wy);
+      ctx.lineTo(ox + totalW - 4, wy);
+      ctx.stroke();
+    }
 
     var startDateObj = p.startDate ? new Date(p.startDate) : new Date();
     var now = new Date();
@@ -711,23 +776,6 @@ export class HomeScene {
     var daysSinceStart = Math.max(0, Math.floor(msSinceStart / 86400000));
     var realTodayDayNum = daysSinceStart + 1;
     var hist = p.history || [];
-
-    // Weekday headers
-    for (var d = 0; d < cols; d++) {
-      var hx = ox + d * (cellSize + gap) + cellSize / 2;
-      ctx.fillStyle = (d === 0 || d === 6) ? C.songMutedRed : C.songInkLight;
-      ctx.font = 'bold ' + fs(w, 7) + 'px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'top';
-      ctx.fillText(WEEKDAYS[d], hx, startY);
-    }
-
-    var gridY = startY + 10;
-    var clipH = rows * (cellSize + gap);
-    ctx.save();
-    ctx.beginPath();
-    roundRect(ctx, ox, gridY - 2, totalW, clipH + 4, 4);
-    ctx.clip();
 
     for (var day = 1; day <= TOTAL_DAYS; day++) {
       var cellDate = new Date(startDateObj.getTime() + (day - 1) * 86400000);
@@ -750,8 +798,10 @@ export class HomeScene {
       var isFuture = day > realTodayDayNum;
       var isSkipped = isPast && !cellDone && !cellFailed;
       var pulseA = 0.06 + Math.sin(this._timer * 3 + day) * 0.03;
+      var cornerR = Math.min(3, cellSize * 0.12);
 
-      roundRect(ctx, cx, cy, cellSize, cellSize, 2);
+      // Cell background
+      roundRect(ctx, cx + 0.5, cy + 0.5, cellSize - 1, cellSize - 1, cornerR);
       if (isToday) {
         ctx.fillStyle = 'rgba(196,96,74,' + pulseA + ')';
       } else if (cellDone) {
@@ -765,30 +815,65 @@ export class HomeScene {
       }
       ctx.fill();
 
+      // Border
       if (isToday) {
         ctx.save();
         ctx.shadowColor = 'rgba(196,96,74,0.3)';
         ctx.shadowBlur = 4 + Math.sin(this._timer * 3) * 2;
         ctx.strokeStyle = C.songMutedRed;
         ctx.lineWidth = 1;
-        roundRect(ctx, cx + 0.5, cy + 0.5, cellSize - 1, cellSize - 1, 2);
+        roundRect(ctx, cx + 1, cy + 1, cellSize - 2, cellSize - 2, Math.max(cornerR - 0.5, 1));
         ctx.stroke();
         ctx.restore();
+      } else if (cellDone) {
+        ctx.strokeStyle = C.jade;
+        ctx.lineWidth = 0.5;
+        ctx.globalAlpha = 0.15;
+        roundRect(ctx, cx + 0.5, cy + 0.5, cellSize - 1, cellSize - 1, cornerR);
+        ctx.stroke();
+        ctx.globalAlpha = 1;
       } else {
-        ctx.strokeStyle = cellDone ? 'rgba(92,140,90,0.1)' : 'rgba(60,45,30,0.03)';
+        ctx.strokeStyle = 'rgba(60,45,30,0.03)';
         ctx.lineWidth = 0.3;
-        roundRect(ctx, cx + 0.5, cy + 0.5, cellSize - 1, cellSize - 1, 2);
+        roundRect(ctx, cx + 0.5, cy + 0.5, cellSize - 1, cellSize - 1, cornerR);
         ctx.stroke();
       }
 
-      // Date text
-      var month = cellDate.getMonth() + 1;
-      var dateNum = cellDate.getDate();
-      ctx.fillStyle = isToday ? C.songMutedRed : (isFuture ? C.songInkLight : C.songInk);
-      ctx.font = 'bold ' + fs(w, 6) + 'px sans-serif';
+      // Day number (1-50) - primary text
+      var dayNumSize = cellSize >= 30 ? fs(w, 10) : fs(w, 8);
+      ctx.fillStyle = isToday ? C.songMutedRed : (cellDone ? C.ink : (isFuture ? C.songInkLight : C.songInk));
+      ctx.font = 'bold ' + dayNumSize + 'px "PingFang SC", sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(month + '/' + dateNum, cx + cellSize / 2, cy + cellSize / 2);
+      ctx.fillText(day + '', cx + cellSize / 2, cy + cellSize / 2 - (cellSize >= 30 ? 4 : 0));
+
+      // Month/day label below number (smaller)
+      if (cellSize >= 28) {
+        var month = cellDate.getMonth() + 1;
+        var dateNum = cellDate.getDate();
+        ctx.fillStyle = 'rgba(60,45,30,0.3)';
+        ctx.font = fs(w, 6) + 'px "PingFang SC", sans-serif';
+        ctx.fillText(month + '/' + dateNum, cx + cellSize / 2, cy + cellSize / 2 + (cellSize >= 30 ? 6 : 4));
+      }
+
+      // Star indicator for 3-star days
+      if (cellDone && cellStars >= 3) {
+        ctx.fillStyle = C.songGold;
+        ctx.font = fs(w, 6) + 'px sans-serif';
+        ctx.textAlign = 'right';
+        ctx.textBaseline = 'top';
+        ctx.fillText('★', cx + cellSize - 2, cy + 1);
+      }
+
+      // Small dot for completed-but-not-perfect days
+      if (cellDone && cellStars < 3 && cellStars > 0) {
+        ctx.fillStyle = cellStars >= 2 ? C.songGold : C.goldLight;
+        ctx.globalAlpha = 0.5;
+        ctx.beginPath();
+        ctx.arc(cx + cellSize - 3, cy + 3, 1.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+      }
     }
 
     ctx.restore();
