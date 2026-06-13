@@ -27,6 +27,8 @@ export class Player {
     this.startDate = data.startDate || null;
     this.petName = data.petName || '';
     this.petAffection = data.petAffection || 0;
+    this.petGrowth = data.petGrowth || 0;
+    this.petSkinTier = data.petSkinTier || 0;
   }
 
   get realm() {
@@ -180,6 +182,10 @@ export class Player {
       nickname: this.nickname,
       avatar: this.avatar,
       startDate: this.startDate,
+      petName: this.petName,
+      petAffection: this.petAffection,
+      petGrowth: this.petGrowth,
+      petSkinTier: this.petSkinTier,
     };
   }
 }

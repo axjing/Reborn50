@@ -1,7 +1,9 @@
 import { STATUS, TOTAL_DAYS, REALMS, XINFA_LIST, SCENES_CONFIG, STAT_LABELS } from '../utils/constants.js';
 import {
-  C, drawBg, drawCard, roundRect, fs, drawInkBtn,
+  C, roundRect, fs,
   drawMountain, drawMist, drawSparkle, drawStars, drawTree,
+  drawFallingLeaves, drawPaperTexture, drawInkWash, drawPaperCard, drawGuofengBtn,
+  drawGuofengIcon, drawSeal, drawCalligraphy, drawGuofengToast,
 } from '../utils/color.js';
 import { Player } from '../entities/Player.js';
 import { StorageManager } from '../systems/StorageManager.js';
@@ -27,7 +29,7 @@ export class HomeScene {
     this._pts = new ParticleSystem();
     this._todoDone = [];
     this._dayComplete = false;
-    this._pet = new Pet();
+    this._pet = new Pet({});
     this._floatTexts = [];
     this._petX = 0;
     this._petY = 0;
@@ -36,6 +38,9 @@ export class HomeScene {
     this._dragStartY = 0;
     this._petDragOffX = 0;
     this._petDragOffY = 0;
+    this._timeOfDay = 0;
+    this._sceneTimer = 0;
+    this._birdPositions = [];
   }
 
   onEnter(data) {
@@ -75,17 +80,20 @@ export class HomeScene {
     this._pts = new ParticleSystem();
     this._dayComplete = false;
 
-    this._startDayOfWeek = 0;
-    var sd = this.player.startDate;
-    if (sd) {
-      this._startDayOfWeek = new Date(sd).getDay();
-    }
-
     this._initTodo();
+    this._pet.loadFromPlayer(this.player);
     this._petX = w - 50;
     this._petY = 42;
     this._isDraggingPet = false;
     this._buildButtons(w);
+
+    var h = this.sm.canvas.height;
+    this._timeOfDay = 0;
+    this._sceneTimer = 0;
+    this._birdPositions = [];
+    for (var bi = 0; bi < 3; bi++) {
+      this._birdPositions.push({ x: Math.random() * w, y: 10 + Math.random() * h * 0.15, speed: 20 + Math.random() * 30, phase: Math.random() * Math.PI * 2 });
+    }
   }
 
   _initTodo() {
@@ -113,6 +121,7 @@ export class HomeScene {
 
   update(dt) {
     this._timer += dt;
+    this._sceneTimer += dt;
     if (this._toastT > 0) this._toastT -= dt;
     this._mistOffset += dt * 0.3;
     this._pts.update();
@@ -124,6 +133,15 @@ export class HomeScene {
       ft.life -= dt;
       if (ft.life <= 0) this._floatTexts.splice(i, 1);
     }
+
+    var w = this.sm.canvas.width;
+    this._timeOfDay = (this._sceneTimer * 0.02) % (Math.PI * 2);
+    for (var bi = 0; bi < this._birdPositions.length; bi++) {
+      var b = this._birdPositions[bi];
+      b.x += b.speed * dt;
+      b.y += Math.sin(this._sceneTimer * 0.5 + b.phase) * 0.3;
+      if (b.x > w + 40) { b.x = -40; b.y = 10 + Math.random() * this.sm.canvas.height * 0.15; }
+    }
   }
 
   render(ctx) {
@@ -134,12 +152,70 @@ export class HomeScene {
     this._drawScene(ctx, w, h);
 
     ctx.save();
-    ctx.globalAlpha = 0.92;
-    drawCard(ctx, 8, 6, w - 16, h - 12, 12);
+    ctx.globalAlpha = 0.88;
+    drawPaperCard(ctx, 8, 6, w - 16, h - 12, 12, { accent: C.jade, accentSide: 'left', shadowBlur: 12 });
     ctx.restore();
 
     this._drawHeader(ctx, w, p);
-    this._pet.draw(ctx, this._petX, this._petY, 28, p.completedDays);
+
+    // Pet growth & positioning
+    var petBaseSize = 28;
+    var petSize = petBaseSize * this._pet.sizeMul;
+    var halfSize = petSize / 2;
+    // Keep pet within safe zone: right side, never overlap header/progress bar
+    var safeRight = w - 14;
+    var petCenterX = Math.min(this._petX, safeRight - halfSize);
+    var petCenterY = this._petY;
+    // Lower the pet as it grows to avoid clipping into content
+    if (petSize > 35) petCenterY = this._petY + (petSize - 35) * 0.5;
+
+    // Growth progress ring (behind pet)
+    ctx.save();
+    var ringR = halfSize + 8;
+    var ringPct = this._pet.growth / this._pet.maxGrowth;
+    ctx.strokeStyle = 'rgba(44,44,44,0.08)';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.arc(petCenterX, petCenterY, ringR, 0, Math.PI * 2);
+    ctx.stroke();
+    if (ringPct > 0) {
+      ctx.strokeStyle = ringPct >= 1 ? C.gold : C.jadeLight;
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.arc(petCenterX, petCenterY, ringR, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * ringPct);
+      ctx.stroke();
+    }
+    ctx.restore();
+
+    this._pet.draw(ctx, petCenterX, petCenterY, petSize, p.completedDays);
+
+    // Skin name badge
+    var skinInfo = this._pet.skinInfo;
+    if (skinInfo) {
+      ctx.save();
+      ctx.fillStyle = C.white;
+      ctx.globalAlpha = 0.75 + Math.sin(this._timer * 2) * 0.15;
+      var badgeX = petCenterX;
+      var badgeY = petCenterY + halfSize + 6;
+      ctx.font = 'bold ' + fs(w, 7) + 'px "SimSun", "KaiTi", serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      ctx.shadowColor = 'rgba(0,0,0,0.3)';
+      ctx.shadowBlur = 3;
+      ctx.fillText('[' + skinInfo.desc + ']', badgeX, badgeY);
+      ctx.restore();
+    }
+
+    // Growth percentage text
+    ctx.save();
+    ctx.fillStyle = C.inkMuted;
+    ctx.globalAlpha = 0.5;
+    ctx.font = fs(w, 6) + 'px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    var gpct = Math.round(this._pet.growth / this._pet.maxGrowth * 100);
+    ctx.fillText(gpct + '%', petCenterX, petCenterY + halfSize + (skinInfo ? 14 : 6));
+    ctx.restore();
 
     var m = this._getTodoMetrics(w);
     this._drawDivider(ctx, w, m.titleY - 2);
@@ -170,31 +246,167 @@ export class HomeScene {
     }
 
     if (this._toastT > 0) {
-      ctx.save();
-      var tw = Math.min(260, w - 40);
-      roundRect(ctx, w / 2 - tw / 2, h * 0.28, tw, 30, 8);
-      ctx.fillStyle = 'rgba(44,44,44,0.82)';
-      ctx.fill();
-      ctx.fillStyle = '#fff';
-      ctx.font = fs(w, 13) + 'px "SimSun", "KaiTi", serif';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(this._toast, w / 2, h * 0.28 + 15);
-      ctx.restore();
+      drawGuofengToast(ctx, w, h, this._toast, Math.min(1, this._toastT));
     }
   }
 
   _drawScene(ctx, w, h) {
-    drawBg(ctx, w, h);
-    drawMountain(ctx, w, h, this._timer * 0.3);
-    drawMist(ctx, w, h, this._mistOffset);
-    drawTree(ctx, w * 0.1, h * 0.55, 1, this._timer * 0.2);
-    drawTree(ctx, w * 0.9, h * 0.58, 1.2, this._timer * 0.2 + 1);
-    drawSparkle(ctx, w * 0.2, h * 0.15, 4, this._timer * 1.3);
-    drawSparkle(ctx, w * 0.8, h * 0.12, 3, this._timer * 1.7 + 1);
-    if (this.player && this.player.realm >= 3) {
-      drawSparkle(ctx, w * 0.5, h * 0.08, 5, this._timer * 0.9 + 2);
+    var tod = this._timeOfDay;
+    var dayPhase = (Math.sin(tod) + 1) / 2;
+    var isNight = tod > Math.PI * 0.75 && tod < Math.PI * 1.75;
+
+    // Sky gradient (time-of-day aware)
+    ctx.save();
+    var skyGrad = ctx.createLinearGradient(0, 0, 0, h * 0.6);
+    if (isNight) {
+      skyGrad.addColorStop(0, '#0A0E2A');
+      skyGrad.addColorStop(0.3, '#141E3A');
+      skyGrad.addColorStop(0.7, '#1A2A4A');
+      skyGrad.addColorStop(1, '#2A3A5A');
+    } else if (tod < Math.PI * 0.5) {
+      skyGrad.addColorStop(0, '#F5C8A0');
+      skyGrad.addColorStop(0.3, '#E8C8A8');
+      skyGrad.addColorStop(0.7, '#D8C8B8');
+      skyGrad.addColorStop(1, '#C8C0B8');
+    } else if (tod < Math.PI) {
+      skyGrad.addColorStop(0, '#D49A6A');
+      skyGrad.addColorStop(0.3, '#C8A880');
+      skyGrad.addColorStop(0.7, '#B8B0A0');
+      skyGrad.addColorStop(1, '#A8A8A0');
+    } else {
+      skyGrad.addColorStop(0, '#6B8BA8');
+      skyGrad.addColorStop(0.3, '#7B9BB8');
+      skyGrad.addColorStop(0.7, '#8BA8C0');
+      skyGrad.addColorStop(1, '#9BB8C8');
     }
+    ctx.fillStyle = skyGrad;
+    ctx.fillRect(0, 0, w, h);
+    ctx.restore();
+
+    // Ground gradient
+    ctx.save();
+    var groundGrad = ctx.createLinearGradient(0, h * 0.7, 0, h);
+    if (isNight) {
+      groundGrad.addColorStop(0, '#1A2A3A');
+      groundGrad.addColorStop(1, '#0E1A2A');
+    } else if (dayPhase > 0.6) {
+      groundGrad.addColorStop(0, '#C8B898');
+      groundGrad.addColorStop(1, '#B0A088');
+    } else {
+      groundGrad.addColorStop(0, '#D8C8A8');
+      groundGrad.addColorStop(1, '#C0B090');
+    }
+    ctx.fillStyle = groundGrad;
+    ctx.fillRect(0, h * 0.7, w, h * 0.3);
+    ctx.restore();
+
+    // Stars (night only)
+    if (isNight) {
+      drawStars(ctx, w, h * 0.6, this._sceneTimer, 20);
+    }
+
+    // Moon
+    if (isNight) {
+      ctx.save();
+      var mx = w * 0.78 + Math.sin(this._sceneTimer * 0.05) * 5;
+      var my = 45 + Math.sin(this._sceneTimer * 0.08) * 3;
+      ctx.fillStyle = 'rgba(220,210,190,0.5)';
+      ctx.beginPath();
+      ctx.arc(mx, my, 16, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = 'rgba(220,210,190,0.25)';
+      ctx.beginPath();
+      ctx.arc(mx + 3, my - 2, 20, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = isNight ? '#0A0E2A' : C.paper;
+      ctx.beginPath();
+      ctx.arc(mx + 7, my - 4, 14, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    // Distant mountains (layer 1 - background)
+    ctx.save();
+    ctx.globalAlpha = 0.12;
+    for (var mi = 0; mi < 4; mi++) {
+      var ddx = (mi * w * 0.25 + Math.sin(this._sceneTimer * 0.02 + mi * 1.2) * 15) % (w + 100) - 50;
+      var ddh = 40 + (mi % 2) * 30 + Math.sin(this._sceneTimer * 0.03 + mi * 2) * 8;
+      var ddw = 100 + (mi % 3) * 40;
+      ctx.fillStyle = isNight ? 'rgba(80,90,120,0.1)' : 'rgba(130,120,110,0.1)';
+      ctx.beginPath();
+      ctx.moveTo(ddx - ddw, h * 0.55);
+      ctx.quadraticCurveTo(ddx, h * 0.55 - ddh, ddx + ddw, h * 0.55);
+      ctx.fill();
+    }
+    ctx.restore();
+
+    // Mid mountains (layer 2)
+    drawMountain(ctx, w, h * 0.58, this._sceneTimer * 0.25);
+
+    // Mist layer
+    drawMist(ctx, w, h * 0.55, this._mistOffset);
+
+    // Trees
+    drawTree(ctx, w * 0.08, h * 0.56, 0.8, this._sceneTimer * 0.15);
+    drawTree(ctx, w * 0.92, h * 0.59, 1, this._sceneTimer * 0.15 + 1);
+    drawTree(ctx, w * 0.18, h * 0.62, 0.6, this._sceneTimer * 0.15 + 2);
+    drawTree(ctx, w * 0.82, h * 0.64, 0.7, this._sceneTimer * 0.15 + 3);
+
+    // Light spots / sparkles
+    var sparkleCount = this.player && this.player.realm >= 3 ? 4 : 2;
+    drawSparkle(ctx, w * 0.15, h * 0.12, 3, this._sceneTimer * 1.1);
+    drawSparkle(ctx, w * 0.85, h * 0.10, 3.5, this._sceneTimer * 1.4 + 1);
+    drawSparkle(ctx, w * 0.4, h * 0.08, 2.5, this._sceneTimer * 0.9 + 0.5);
+    if (sparkleCount >= 3) drawSparkle(ctx, w * 0.6, h * 0.14, 4, this._sceneTimer * 1.2 + 2);
+    if (sparkleCount >= 4) drawSparkle(ctx, w * 0.3, h * 0.18, 3, this._sceneTimer * 0.8 + 3);
+
+    // Birds
+    ctx.save();
+    ctx.strokeStyle = isNight ? 'rgba(180,190,200,0.15)' : 'rgba(80,70,60,0.15)';
+    ctx.lineWidth = 1;
+    ctx.lineCap = 'round';
+    for (var bi = 0; bi < this._birdPositions.length; bi++) {
+      var b = this._birdPositions[bi];
+      var bw = 6 + (bi % 2) * 3;
+      ctx.beginPath();
+      ctx.moveTo(b.x - bw, b.y + 2);
+      ctx.quadraticCurveTo(b.x - bw * 0.3, b.y - 3, b.x, b.y);
+      ctx.quadraticCurveTo(b.x + bw * 0.3, b.y - 3, b.x + bw, b.y + 2);
+      ctx.stroke();
+    }
+    ctx.restore();
+
+    // Falling leaves
+    drawFallingLeaves(ctx, w, h, this._sceneTimer, 4);
+
+    // Decorative calligraphy in sky (subtle, floating)
+    if (!isNight) {
+      ctx.save();
+      ctx.globalAlpha = 0.06 + Math.sin(this._sceneTimer * 0.15) * 0.02;
+      drawCalligraphy(ctx, '修行渡劫', 24, h * 0.18, w, { size: 10, color: C.ink, bold: true, brushEffect: true });
+      ctx.globalAlpha = 0.04 + Math.sin(this._sceneTimer * 0.12 + 1) * 0.015;
+      drawCalligraphy(ctx, '五十日归', w - 80, h * 0.14, w, { size: 8, color: C.ink, bold: true, brushEffect: true });
+      ctx.restore();
+    }
+
+    // Ink wash atmosphere
+    if (this.player && this.player.realm >= 2) {
+      drawInkWash(ctx, w * 0.1, h * 0.4, w * 0.3, h * 0.2, C.moLv, 0.04);
+      drawInkWash(ctx, w * 0.6, h * 0.55, w * 0.35, h * 0.15, C.shiQing, 0.03);
+    }
+    if (this.player && this.player.realm >= 4) {
+      drawInkWash(ctx, w * 0.35, h * 0.3, w * 0.25, h * 0.18, C.zhuSha, 0.02);
+    }
+
+    // Decorative Guofeng icons in background
+    var iconAlpha = isNight ? 0.08 : 0.12;
+    ctx.save();
+    ctx.globalAlpha = iconAlpha;
+    drawGuofengIcon(ctx, w * 0.5, h * 0.22, 50, isNight ? 'moon' : 'sun', this._sceneTimer);
+    ctx.globalAlpha = iconAlpha * 0.6;
+    drawGuofengIcon(ctx, w * 0.22, h * 0.32, 35, 'mountain', this._sceneTimer + 1);
+    drawGuofengIcon(ctx, w * 0.78, h * 0.28, 30, 'cloud', this._sceneTimer + 2);
+    ctx.restore();
   }
 
   _drawDivider(ctx, w, y) {
@@ -214,20 +426,30 @@ export class HomeScene {
   }
 
   _drawHeader(ctx, w, p) {
+    // Title with calligraphy style
+    ctx.save();
     ctx.fillStyle = C.ink;
-    ctx.font = 'bold ' + fs(w, 15) + 'px "SimSun", "KaiTi", serif';
+    ctx.font = 'bold ' + fs(w, 16) + 'px "SimSun", "KaiTi", serif';
     ctx.textAlign = 'left';
     ctx.textBaseline = 'top';
-    ctx.fillText('Reborn·江湖', 18, 14);
+    ctx.shadowColor = 'rgba(44,44,44,0.1)';
+    ctx.shadowBlur = 2;
+    ctx.fillText('Reborn · 江湖', 18, 12);
 
     ctx.fillStyle = REALM_COLORS[p.realm] || C.inkLight;
     ctx.font = fs(w, 11) + 'px "SimSun", "KaiTi", serif';
     ctx.textAlign = 'right';
+    ctx.shadowBlur = 0;
     ctx.fillText(p.realmName + '  Lv.' + p.level, w - 18, 14);
+    ctx.restore();
 
+    // Decorative seal stamp
+    drawSeal(ctx, w - 18, 28, 24, '修', C.zhuSha);
+
+    // Progress bar with realm milestones
     var bx = 18;
-    var by = 30;
-    var bw = w - 36;
+    var by = 32;
+    var bw = w - 52;
     var bh = 8;
     roundRect(ctx, bx, by, bw, bh, bh / 2);
     ctx.fillStyle = 'rgba(44,44,44,0.06)';
@@ -257,16 +479,15 @@ export class HomeScene {
     }
 
     ctx.fillStyle = C.gold;
-    ctx.font = 'bold ' + fs(w, 10) + 'px sans-serif';
+    ctx.font = 'bold ' + fs(w, 10) + 'px "SimSun", "KaiTi", serif';
     ctx.textAlign = 'left';
     ctx.textBaseline = 'top';
-    var streakEmoji = p.streak >= 14 ? '🔥' : (p.streak >= 7 ? '⭐' : '⚡');
-    ctx.fillText(streakEmoji + ' ' + p.streak + '天连击', 18, 46);
+    ctx.fillText('⚡ ' + p.streak + '天连击', 18, 47);
 
     ctx.fillStyle = C.inkMuted;
-    ctx.font = fs(w, 9) + 'px sans-serif';
+    ctx.font = fs(w, 9) + 'px "SimSun", "KaiTi", serif';
     ctx.textAlign = 'right';
-    ctx.fillText(p.completedDays + '/' + TOTAL_DAYS + '天', w - 18, 46);
+    ctx.fillText(p.completedDays + '/' + TOTAL_DAYS + '天', w - 18, 48);
   }
 
   _getTodoMetrics(w) {
@@ -296,22 +517,15 @@ export class HomeScene {
     var m = this._getTodoMetrics(w);
     var gap = 26;
 
-    // background card
+    // background card with paper texture
     var cardH = m.progY + m.progH + m.btnH + 12 - (m.titleY - 8);
-    roundRect(ctx, 14, m.titleY - 8, w - 28, cardH, 6);
-    ctx.fillStyle = 'rgba(250,246,238,0.55)';
-    ctx.fill();
-    ctx.strokeStyle = 'rgba(44,44,44,0.04)';
-    ctx.lineWidth = 0.5;
-    ctx.stroke();
-
-    // decorative left accent bar
-    var barG = ctx.createLinearGradient(0, m.titleY - 4, 0, m.titleY + 12);
-    barG.addColorStop(0, 'rgba(91,140,90,0.4)');
-    barG.addColorStop(1, 'rgba(212,160,74,0.15)');
-    ctx.fillStyle = barG;
-    roundRect(ctx, 18, m.titleY - 4, 4, 18, 2);
-    ctx.fill();
+    drawPaperCard(ctx, 14, m.titleY - 8, w - 28, cardH, 6, {
+      bgColor: 'rgba(250,246,238,0.55)',
+      noBorder: true,
+      noShadow: true,
+      accent: C.jade,
+      accentSide: 'left',
+    });
 
     ctx.fillStyle = C.ink;
     ctx.font = 'bold ' + fs(w, 14) + 'px "SimSun", "KaiTi", serif';
@@ -414,16 +628,22 @@ export class HomeScene {
     if (!p.completedToday && doneCount > 0) {
       var bx = w - 18 - 88;
       var by = m.progY - 1;
-      var btnColor = doneCount >= m.count ? C.gold : C.red;
+      var btnColor = doneCount >= m.count ? C.gold : C.zhuSha;
+      drawGuofengBtn(ctx, bx, by, doneCount >= m.count ? 100 : 88, doneCount >= m.count ? m.progH + 8 : m.progH + 6, '完成修行', {
+        bgColor: btnColor,
+        fontSize: 12,
+        doubleBorder: doneCount >= m.count,
+        cornerDecor: false,
+      });
       if (doneCount >= m.count) {
         ctx.save();
-        var glow = 6 + Math.sin(this._timer * 4) * 4;
         ctx.shadowColor = C.gold;
-        ctx.shadowBlur = glow;
-        drawInkBtn(ctx, bx, by, 100, m.progH + 8, '完成修行', btnColor);
+        ctx.shadowBlur = 6 + Math.sin(this._timer * 4) * 4;
+        ctx.strokeStyle = C.goldLight;
+        ctx.lineWidth = 1;
+        roundRect(ctx, bx + 1.5, by + 1.5, 97, m.progH + 5, 5);
+        ctx.stroke();
         ctx.restore();
-      } else {
-        drawInkBtn(ctx, bx, by, 88, m.progH + 6, '完成修行', btnColor);
       }
     }
   }
@@ -440,12 +660,12 @@ export class HomeScene {
     var gap = 2;
     var cellW = Math.max(14, Math.floor((w - 36 - gap * (cols - 1)) / cols));
     var cellH = Math.max(12, Math.floor((availH - 30) / rows) - gap);
-    var cellSize = Math.min(cellW, cellH, 32);
+    var cellSize = Math.min(cellW, cellH, 36);
     var totalW = cols * cellSize + (cols - 1) * gap;
-    var ox = 18 + (w - 36 - totalW) / 2;
+    var ox = Math.max(8, (w - totalW) / 2);
     var hdrY = calY + 2;
 
-    // title with brush underline
+    // title
     ctx.fillStyle = C.ink;
     ctx.font = 'bold ' + fs(w, 11) + 'px "SimSun", "KaiTi", serif';
     ctx.textAlign = 'left';
@@ -463,6 +683,12 @@ export class HomeScene {
     ctx.lineTo(18 + tuW, calY + 14);
     ctx.stroke();
 
+    var startDateObj = p.startDate ? new Date(p.startDate) : new Date();
+    var now = new Date();
+    var msSinceStart = now.getTime() - startDateObj.getTime();
+    var daysSinceStart = Math.max(0, Math.floor(msSinceStart / 86400000));
+    var realTodayDayNum = daysSinceStart + 1;
+
     for (var d = 0; d < cols; d++) {
       var hx = ox + d * (cellSize + gap) + cellSize / 2;
       ctx.fillStyle = (d === 0 || d === 6) ? C.redLight : C.inkMuted;
@@ -472,37 +698,41 @@ export class HomeScene {
       ctx.fillText(WEEKDAYS[d], hx, hdrY);
     }
 
-    var startDow = this._startDayOfWeek !== undefined ? this._startDayOfWeek : 0;
-    var todayIdx = p.completedDays;
     var gridY = hdrY + 12;
-
-    // clip
     var clipH = rows * (cellSize + gap) + 4;
     ctx.save();
     roundRect(ctx, ox - 2, gridY - 2, totalW + 4, clipH, 4);
     ctx.clip();
 
+    var hist = p.history || [];
+
     for (var day = 1; day <= TOTAL_DAYS; day++) {
-      var dow = (startDow + day - 1) % cols;
-      var week = Math.floor((startDow + day - 1) / cols);
+      var cellDate = new Date(startDateObj.getTime() + (day - 1) * 86400000);
+      var dow = cellDate.getDay();
+      var week = Math.floor((startDateObj.getDay() + day - 1) / cols);
 
       var cx = ox + dow * (cellSize + gap);
       var cy = gridY + week * (cellSize + gap);
 
-      var isPast = day <= p.completedDays;
-      var isToday = day === p.completedDays + 1 && !p.completedToday;
-      var isFuture = day > p.completedDays + 1;
-
       var cellDone = false;
+      var cellFailed = false;
       var cellStars = 0;
-      var hist = p.history || [];
       for (var k = 0; k < hist.length; k++) {
-        if (hist[k].day === day && !hist[k].failed) {
-          cellDone = true;
-          cellStars = hist[k].stars || 0;
+        if (hist[k].day === day) {
+          if (!hist[k].failed) {
+            cellDone = true;
+            cellStars = hist[k].stars || 0;
+          } else {
+            cellFailed = true;
+          }
           break;
         }
       }
+
+      var isPast = day < realTodayDayNum;
+      var isToday = day === realTodayDayNum && !p.completedToday;
+      var isFuture = day > realTodayDayNum;
+      var isSkipped = isPast && !cellDone && !cellFailed;
 
       var pulseA = 0.08 + Math.sin(this._timer * 3 + day) * 0.04;
       roundRect(ctx, cx, cy, cellSize, cellSize, 2);
@@ -514,14 +744,16 @@ export class HomeScene {
         if (cellStars >= 3) ctx.fillStyle = C.jade;
         else if (cellStars >= 2) ctx.fillStyle = C.goldLight;
         else ctx.fillStyle = C.gold;
-      } else if (isPast) {
-        ctx.fillStyle = 'rgba(92,140,90,0.12)';
+      } else if (cellFailed) {
+        ctx.fillStyle = 'rgba(194,53,49,0.08)';
+      } else if (isSkipped) {
+        ctx.fillStyle = 'rgba(44,44,44,0.05)';
       } else {
         ctx.fillStyle = 'rgba(44,44,44,0.03)';
       }
       ctx.fill();
 
-      // today glow
+      // border/glow
       if (isToday) {
         ctx.save();
         ctx.shadowColor = 'rgba(194,53,49,0.5)';
@@ -538,7 +770,7 @@ export class HomeScene {
         ctx.stroke();
       }
 
-      // realm marker dot (bottom-right)
+      // realm marker dot
       for (var r = 0; r < REALMS.length; r++) {
         if (REALMS[r].reqDays === day && day > 0) {
           ctx.fillStyle = REALMS[r].color;
@@ -553,14 +785,30 @@ export class HomeScene {
         }
       }
 
-      // day number
-      ctx.fillStyle = isToday ? C.red : (isFuture ? C.inkMuted : C.ink);
-      ctx.font = fs(w, cellSize > 20 ? 9 : 7) + 'px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(day + '', cx + cellSize / 2, cy + cellSize / 2);
+      // real date label (month/day)
+      var month = cellDate.getMonth() + 1;
+      var dateNum = cellDate.getDate();
+      var dateStr = month + '/' + dateNum;
 
-      // small star for completed
+      if (cellSize >= 26) {
+        ctx.fillStyle = isToday ? C.red : (isFuture ? C.inkMuted : C.ink);
+        ctx.font = 'bold ' + fs(w, 7) + 'px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(dateStr, cx + cellSize / 2, cy + cellSize / 2 - 3);
+        ctx.fillStyle = isToday ? C.redLight : C.inkMuted;
+        ctx.font = fs(w, 5) + 'px sans-serif';
+        var dayLabel = 'D' + day;
+        ctx.fillText(dayLabel, cx + cellSize / 2, cy + cellSize / 2 + 6);
+      } else {
+        ctx.fillStyle = isToday ? C.red : (isFuture ? C.inkMuted : C.ink);
+        ctx.font = fs(w, 7) + 'px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(dateStr, cx + cellSize / 2, cy + cellSize / 2);
+      }
+
+      // star for completed
       if (cellDone && cellSize >= 18) {
         ctx.fillStyle = C.goldLight;
         ctx.font = fs(w, 4) + 'px sans-serif';
@@ -572,7 +820,6 @@ export class HomeScene {
 
     ctx.restore();
 
-    // colored legend
     var legY = gridY + clipH + 2;
     ctx.font = fs(w, 6) + 'px sans-serif';
     ctx.textAlign = 'left';
@@ -606,7 +853,7 @@ export class HomeScene {
     var ph = Math.min(340, h - 60);
     var px = (w - pw) / 2;
     var py = (h - ph) / 2;
-    drawCard(ctx, px, py, pw, ph, 14);
+    drawPaperCard(ctx, px, py, pw, ph, 14, { accent: C.gold, innerGlow: true, shadowBlur: 16 });
 
     ctx.fillStyle = C.ink;
     ctx.font = 'bold ' + fs(w, 18) + 'px "SimSun", "KaiTi", serif';
@@ -668,9 +915,17 @@ export class HomeScene {
   }
 
   _drawNav(ctx) {
+    var w = ctx.canvas.width;
     for (var i = 0; i < this._buttons.length; i++) {
       var b = this._buttons[i];
-      drawInkBtn(ctx, b.x, b.y, b.w, b.h, b.text, b.color);
+      var btnColor = b.color || C.zhuSha;
+      var isSpecial = (b.action === 'stats') || (b.action === 'cultivation');
+      drawGuofengBtn(ctx, b.x, b.y, b.w, b.h, b.text, {
+        bgColor: btnColor,
+        fontSize: 12,
+        doubleBorder: isSpecial,
+        cornerDecor: isSpecial,
+      });
     }
   }
 
@@ -692,6 +947,7 @@ export class HomeScene {
       this._dragStartY = y;
       this._petDragOffX = petCX - x;
       this._petDragOffY = petCY - y;
+      this._pet.setState('drag');
       return;
     }
 
@@ -747,6 +1003,8 @@ export class HomeScene {
 
   handleDrag(x, y) {
     if (!this._isDraggingPet) return;
+    var prevX = this._petX;
+    var prevY = this._petY;
     this._petX = x + this._petDragOffX;
     this._petY = y + this._petDragOffY;
     // clamp to screen bounds
@@ -754,6 +1012,12 @@ export class HomeScene {
     var h = this.sm.canvas.height;
     this._petX = Math.max(20, Math.min(w - 20, this._petX));
     this._petY = Math.max(20, Math.min(h - 20, this._petY));
+    // Apply drag squish force
+    var dx = this._petX - prevX;
+    var dy = this._petY - prevY;
+    if (Math.abs(dx) > 0.5 || Math.abs(dy) > 0.5) {
+      this._pet.applyDragForce(dx, dy);
+    }
   }
 
   handleDragEnd(x, y) {
@@ -768,6 +1032,8 @@ export class HomeScene {
       this._emitPetText(ENCOURAGE_MSGS[Math.floor(Math.random() * ENCOURAGE_MSGS.length)]);
       this._pts.emitInkSplash(this._petX, this._petY);
       if (this.sm.audio) this.sm.audio.playTap();
+    } else {
+      this._pet.setState('idle');
     }
   }
 
@@ -787,7 +1053,6 @@ export class HomeScene {
     this._todoDone[i] = true;
     this.player.applyRule(XINFA_LIST[i].id);
     this.player.petAffection = (this.player.petAffection || 0) + 1;
-    StorageManager.save(this.player);
 
     // floating stat text
     var m2 = this._getTodoMetrics(this.sm.canvas.width);
@@ -813,8 +1078,16 @@ export class HomeScene {
     this._pts.emitInkSplash(ftX, ftY);
     if (this.sm.audio) this.sm.audio.playComplete();
 
-    // pet encouragement
+    // pet encouragement + growth
     this._pet.setState('happy');
+    var skinUpgraded = this._pet.addGrowth(1);
+    if (skinUpgraded && this._pet.skinInfo) {
+      this._toast = '宠物进化 · ' + this._pet.skinInfo.desc + '!';
+      this._toastT = 3;
+      this._pts.emitGoldSplash(this._petX, this._petY);
+    }
+    this._pet.saveToPlayer(this.player);
+    StorageManager.save(this.player);
     this._emitPetText(ENCOURAGE_MSGS[Math.floor(Math.random() * ENCOURAGE_MSGS.length)]);
     this._pts.emitInkSplash(this._petX, this._petY);
 
@@ -855,10 +1128,21 @@ export class HomeScene {
       this._toastT = 2.5;
     }
 
-    StorageManager.save(p);
-    if (this.sm.audio) this.sm.audio.playReward();
-
     this._dayComplete = true;
+
+    // pet growth bonus for completing all 7 tasks (before toast to check skin)
+    var skinUpgraded = this._pet.addGrowth(7);
+    this._pet.saveToPlayer(p);
+    StorageManager.save(p);
+
+    // Skin upgrade toast (takes priority)
+    if (skinUpgraded && this._pet.skinInfo) {
+      this._toast = '宠物进化 · ' + this._pet.skinInfo.desc + '!';
+      this._toastT = 3;
+      this._pts.emitGoldSplash(this.sm.canvas.width * 0.5, 48);
+    }
+
+    if (this.sm.audio) this.sm.audio.playReward();
 
     // pet evolution check
     var newStage = this._pet.getStage(p.completedDays);

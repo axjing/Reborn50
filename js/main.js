@@ -22,6 +22,9 @@ canvas.height = systemInfo.windowHeight;
 var audio = new AudioManager();
 audio.init();
 
+// Font family — system fonts only (wx.loadFont not available without bundled font file)
+wx.setStorageSync('__font_family__', '"SimSun", "KaiTi", serif');
+
 var sceneManager = new SceneManager();
 sceneManager.init(canvas);
 sceneManager.audio = audio;

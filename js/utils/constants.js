@@ -30,44 +30,6 @@ export const REALMS = [
   { id: 5, name: '自律宗师', title: '返璞归真', desc: '五十日渡劫圆满，超凡入圣', reqDays: 50, color: '#D4A04A' },
 ];
 
-export const CHAPTERS = [
-  {
-    id: 1, title: '初入江湖',
-    subtitle: '踏出第一步',
-    dayRange: [1, 10],
-    desc: '你从俗世醒来，发现自己身处一片晨光山林。一位白发老者留下了一卷竹简，上面记载着七大心法的入门要诀……',
-    color: '#7BA87B',
-  },
-  {
-    id: 2, title: '静心悟道',
-    subtitle: '心若止水，方见本心',
-    dayRange: [11, 20],
-    desc: '山林深处，一座静谧书院隐于云雾之中。你推开木门，满架古籍仿佛在等待有缘人……',
-    color: '#6B9FB5',
-  },
-  {
-    id: 3, title: '炼体精进',
-    subtitle: '文明精神，野蛮体魄',
-    dayRange: [21, 30],
-    desc: '书院后院连接着一座云中练武台。一位武僧模样的中年人向你点头致意："是时候锤炼你的筋骨了。"',
-    color: '#B58B6B',
-  },
-  {
-    id: 4, title: '学识大成',
-    subtitle: '博学笃志，切问近思',
-    dayRange: [31, 40],
-    desc: '膳堂的烟火气中，你注意到墙上挂着一幅字——"治大国若烹小鲜"。原来修行之道，就在日常一餐一饭之间。',
-    color: '#9B7BB5',
-  },
-  {
-    id: 5, title: '渡劫封神',
-    subtitle: '五十日圆满，超凡入圣',
-    dayRange: [41, 50],
-    desc: '望月台上，星河璀璨。你回顾这五十日修行路，万千感悟涌上心头。最后一夜，你终于明白——自律不是束缚，而是真正的自由。',
-    color: '#D4A04A',
-  },
-];
-
 export const SCENES_CONFIG = {
   morning: {
     name: '晨光山林',
