@@ -1,7 +1,7 @@
 import { STATUS, STAT_LABELS } from '../utils/constants.js';
 import {
   C, drawBg, drawCard, roundRect, fs, drawInkBtn,
-  drawMist, drawStars, drawSparkle,
+  drawMist, drawStars, drawSparkle, getFont,
 } from '../utils/color.js';
 import { StorageManager } from '../systems/StorageManager.js';
 import { ParticleSystem } from '../entities/Particle.js';
@@ -111,13 +111,13 @@ export class AdventureScene {
     ctx.restore();
 
     ctx.fillStyle = C.ink;
-    ctx.font = 'bold ' + fs(w, 18) + 'px "SimSun", "KaiTi", serif';
+    ctx.font = getFont(w, 18, 'song');
     ctx.textAlign = 'center';
     ctx.textBaseline = 'top';
     ctx.fillText('江湖奇遇', w / 2, 16);
 
     ctx.fillStyle = C.inkMuted;
-    ctx.font = fs(w, 11) + 'px "SimSun", "KaiTi", serif';
+    ctx.font = getFont(w, 11, 'sans');
     ctx.fillText('待触发: ' + this._unlocked.length + '  |  已触发: ' + this._found.length, w / 2, 40);
 
     ctx.save();
@@ -127,14 +127,14 @@ export class AdventureScene {
     var y = 60;
     if (this._unlocked.length === 0 && this._found.length === 0) {
       ctx.fillStyle = C.inkMuted;
-      ctx.font = fs(w, 13) + 'px "SimSun", "KaiTi", serif';
+      ctx.font = getFont(w, 13, 'sans');
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText('暂无奇遇，继续修行以触发', w / 2, h / 2);
     } else {
       if (this._unlocked.length > 0) {
         ctx.fillStyle = C.red;
-        ctx.font = 'bold ' + fs(w, 13) + 'px "SimSun", "KaiTi", serif';
+        ctx.font = getFont(w, 13, 'song');
         ctx.textAlign = 'left';
         ctx.fillText('—— 可触发 ——', 24, y);
         y += 25;
@@ -150,17 +150,17 @@ export class AdventureScene {
           ctx.stroke();
 
           ctx.fillStyle = C.gold;
-          ctx.font = 'bold ' + fs(w, 14) + 'px "SimSun", "KaiTi", serif';
+          ctx.font = getFont(w, 14, 'song');
           ctx.textAlign = 'left';
           ctx.textBaseline = 'top';
           ctx.fillText(a.name, 28, y + 6);
 
           ctx.fillStyle = C.inkLight;
-          ctx.font = fs(w, 10) + 'px sans-serif';
+          ctx.font = getFont(w, 10, 'sans');
           ctx.fillText(a.desc, 28, y + 28);
 
           ctx.fillStyle = C.gold;
-          ctx.font = fs(w, 10) + 'px sans-serif';
+          ctx.font = getFont(w, 10, 'sans');
           ctx.textAlign = 'right';
           ctx.textBaseline = 'top';
           ctx.fillText('触发', w - 30, y + 20);
@@ -172,7 +172,7 @@ export class AdventureScene {
       if (this._found.length > 0) {
         y += 6;
         ctx.fillStyle = C.jade;
-        ctx.font = 'bold ' + fs(w, 13) + 'px "SimSun", "KaiTi", serif';
+        ctx.font = getFont(w, 13, 'song');
         ctx.textAlign = 'left';
         ctx.fillText('—— 已触发 ——', 24, y);
         y += 25;
@@ -181,7 +181,7 @@ export class AdventureScene {
           for (var k = 0; k < ADVENTURES.length; k++) {
             if (ADVENTURES[k].id === this._found[j]) {
               ctx.fillStyle = C.jade;
-              ctx.font = fs(w, 10) + 'px "SimSun", "KaiTi", serif';
+              ctx.font = getFont(w, 10, 'sans');
               ctx.fillText('✔ ' + ADVENTURES[k].name, 28, y);
               y += 18;
               break;
@@ -198,7 +198,7 @@ export class AdventureScene {
 
     if (this._showResult) {
       ctx.save();
-      ctx.fillStyle = 'rgba(44,44,44,0.5)';
+      ctx.fillStyle = 'rgba(60,45,30,0.5)';
       ctx.fillRect(0, 0, w, h);
 
       var rw = Math.min(280, w - 40);
@@ -208,24 +208,24 @@ export class AdventureScene {
       drawCard(ctx, rx, ry, rw, rh, 14);
 
       ctx.fillStyle = C.gold;
-      ctx.font = 'bold ' + fs(w, 20) + 'px "SimSun", "KaiTi", serif';
+      ctx.font = getFont(w, 20, 'song');
       ctx.textAlign = 'center';
       ctx.textBaseline = 'top';
       ctx.fillText(this._showResult.name, w / 2, ry + 16);
 
       ctx.fillStyle = C.inkLight;
-      ctx.font = fs(w, 12) + 'px "SimSun", "KaiTi", serif';
+      ctx.font = getFont(w, 12, 'sans');
       ctx.fillText(this._showResult.desc, w / 2, ry + 46);
 
       ctx.fillStyle = C.jade;
-      ctx.font = fs(w, 14) + 'px sans-serif';
+      ctx.font = getFont(w, 14, 'sans');
       ctx.fillText('修为 +' + (this._showResult.reward.exp || 0), w / 2, ry + 80);
 
       var rewardKeys = Object.keys(this._showResult.reward).filter(function(k) { return k !== 'exp'; });
       if (rewardKeys.length > 0) {
         ctx.fillStyle = C.gold;
-        ctx.font = fs(w, 12) + 'px "SimSun", "KaiTi", serif';
-        ctx.fillText(rewardKeys.map(function(k) { return STAT_LABELS[k] + '+' + this._showResult.reward[k]; }.bind(this)).join('  '), w / 2, ry + 106);
+        ctx.font = getFont(w, 12, 'sans');
+        ctx.fillText(rewardKeys.map(function(k) { return (STAT_LABELS[k] || k) + '+' + this._showResult.reward[k]; }.bind(this)).join('  '), w / 2, ry + 106);
       }
 
       drawInkBtn(ctx, (w - 100) / 2, ry + rh - 44, 100, 32, '收下', C.gold);

@@ -1,4 +1,4 @@
-import { STORAGE_KEY, SAVE_VERSION, TOTAL_DAYS } from '../utils/constants.js';
+import { STORAGE_KEY, SAVE_VERSION } from '../utils/constants.js';
 import { Player } from '../entities/Player.js';
 import { ACHIEVEMENTS } from '../data/achievements.js';
 

@@ -2,6 +2,7 @@ import { STATUS } from '../utils/constants.js';
 import {
   C, drawBg, drawCard, roundRect, fs, drawInkBtn,
   drawMountain, drawMist, drawSparkle, drawTree,
+  drawSongCard, drawSongBtn, getFont,
 } from '../utils/color.js';
 import { StorageManager } from '../systems/StorageManager.js';
 
@@ -71,7 +72,7 @@ export class TitleScene {
     if (this._phase === 0) {
       ctx.save();
       ctx.fillStyle = C.ink;
-      ctx.font = fs(w, 16) + 'px "SimSun", "KaiTi", serif';
+      ctx.font = getFont(w, 16, 'sans');
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       for (var i = 0; i <= this._lineIdx && i < OPENING.length; i++) {
@@ -82,10 +83,10 @@ export class TitleScene {
     } else {
       ctx.save();
       ctx.fillStyle = C.ink;
-      ctx.font = 'bold ' + fs(w, 36) + 'px "SimSun", "KaiTi", serif';
+      ctx.font = getFont(w, 36, 'song');
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText('Reborn·江湖', w / 2, h * 0.13);
+      ctx.fillText('自律 · 江湖', w / 2, h * 0.13);
 
       ctx.strokeStyle = C.gold;
       ctx.lineWidth = 1;
@@ -96,10 +97,10 @@ export class TitleScene {
       ctx.stroke();
 
       ctx.fillStyle = C.red;
-      ctx.font = fs(w, 15) + 'px "SimSun", "KaiTi", serif';
+      ctx.font = getFont(w, 15, 'song');
       ctx.fillText('五十日 · 七大心法 · 重塑自我', w / 2, h * 0.13 + fs(w, 36) + 20);
       ctx.fillStyle = C.inkLight;
-      ctx.font = fs(w, 13) + 'px "SimSun", "KaiTi", serif';
+      ctx.font = getFont(w, 13, 'sans');
       ctx.fillText('以江湖炼自律  ·  以五十日渡新生', w / 2, h * 0.13 + fs(w, 36) + 44);
 
       drawSparkle(ctx, w / 2 - 60, h * 0.30, 5, this._charBob * 1.3);

@@ -1,6 +1,6 @@
 export var C = {
-  ink: '#2C2C2C',
-  inkLight: '#5A5A5A',
+  ink: '#4A4A4A',
+  inkLight: '#6B6B6B',
   inkMuted: '#999999',
   paper: '#F5F0E8',
   paperDark: '#E8E0D0',
@@ -20,8 +20,8 @@ export var C = {
   earthLight: '#D4B08C',
   purple: '#9B7BB5',
   purpleLight: '#B89BD4',
-  shadow: 'rgba(44,44,44,0.1)',
-  shadowHeavy: 'rgba(44,44,44,0.25)',
+  shadow: 'rgba(60,45,30,0.10)',
+  shadowHeavy: 'rgba(60,45,30,0.20)',
   white: '#FFFEF8',
 
   // Guofeng palette
@@ -39,6 +39,20 @@ export var C = {
   daiMei: '#4A6B8B',
   luoFu: '#D4896E',
   yaQing: '#6B8B8B',
+
+  // Song-style light palette (aged paper, traditional Chinese pigments)
+  songBase: '#E8E0CC',
+  songBg: '#EDE6D4',
+  songCard: '#F5EFE0',
+  songPaper: '#F0E9D6',
+  songCeladon: '#6B9B90',
+  songTea: '#B8956A',
+  songMutedRed: '#B84C3A',
+  songGold: '#BD9440',
+  songInk: '#4A4A4A',
+  songInkLight: '#7A7A7A',
+  songBorder: '#CBBFAD',
+  songLine: '#BEB29E',
 };
 
 export function fs(cw, px) {
@@ -62,18 +76,18 @@ export function roundRect(ctx, x, y, w, h, r) {
 
 export function drawBg(ctx, w, h) {
   var g = ctx.createLinearGradient(0, 0, 0, h);
-  g.addColorStop(0, '#F0E8D8');
-  g.addColorStop(0.3, '#F5F0E8');
-  g.addColorStop(0.7, '#E8E0D0');
-  g.addColorStop(1, '#DDD5C5');
+  g.addColorStop(0, '#EDE0C8');
+  g.addColorStop(0.35, '#F0E8D4');
+  g.addColorStop(0.7, '#E5DCC4');
+  g.addColorStop(1, '#DACCB0');
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, w, h);
 
-  for (var i = 0; i < 3; i++) {
-    var cx = Math.random() * w;
-    var cy = 10 + Math.random() * h * 0.4;
-    var r = 40 + Math.random() * 80;
-    ctx.fillStyle = 'rgba(194,53,49,0.015)';
+  for (var i = 0; i < 4; i++) {
+    var cx = 10 + Math.random() * (w - 20);
+    var cy = 10 + Math.random() * h * 0.5;
+    var r = 30 + Math.random() * 90;
+    ctx.fillStyle = i % 2 === 0 ? 'rgba(160,130,80,0.012)' : 'rgba(180,100,60,0.010)';
     ctx.beginPath();
     ctx.arc(cx, cy, r, 0, Math.PI * 2);
     ctx.fill();
@@ -274,18 +288,19 @@ export function drawFallingLeaves(ctx, w, h, t, count) {
 // ---- Guofeng Phase 1 additions ----
 
 export function drawPaperTexture(ctx, x, y, w, h, alpha) {
-  alpha = alpha || 0.03;
+  alpha = alpha || 0.04;
   ctx.save();
   ctx.globalAlpha = alpha;
   var seed = 1;
-  for (var i = 0; i < 60; i++) {
+  var fiberColors = ['#8B7B6B', '#9A8A7A', '#7A6B5A', '#B0A08A', '#C8BAA0'];
+  for (var i = 0; i < 80; i++) {
     seed = (seed * 16807) % 2147483647;
-    var px = x + (seed % w);
+    var px = x + (seed % (w + 1));
     seed = (seed * 16807) % 2147483647;
-    var py = y + (seed % h);
+    var py = y + (seed % (h + 1));
     seed = (seed * 16807) % 2147483647;
-    var pr = 0.5 + (seed % 3);
-    ctx.fillStyle = (seed % 2) ? '#8B7B6B' : '#A09080';
+    var pr = 0.5 + (seed % 4) * 0.5;
+    ctx.fillStyle = fiberColors[seed % fiberColors.length];
     ctx.beginPath();
     ctx.arc(px, py, pr, 0, Math.PI * 2);
     ctx.fill();
@@ -384,6 +399,103 @@ export function drawPaperCard(ctx, x, y, w, h, r, options) {
     ctx.fillRect(x, y, w, h);
     ctx.restore();
   }
+}
+
+export function drawSongCard(ctx, x, y, w, h, r, options) {
+  options = options || {};
+  r = r || 8;
+  var bgColor = options.bgColor || C.songCard;
+  var noBorder = options.noBorder || false;
+
+  ctx.save();
+  if (options.shadow !== false) {
+    ctx.shadowColor = C.shadow;
+    ctx.shadowBlur = 6;
+    ctx.shadowOffsetY = 1;
+  }
+  roundRect(ctx, x, y, w, h, r);
+  ctx.fillStyle = bgColor;
+  ctx.fill();
+  if (options.shadow !== false) {
+    ctx.shadowColor = 'transparent';
+  }
+  ctx.restore();
+
+  drawPaperTexture(ctx, x, y, w, h, 0.02);
+
+  // Subtle warm vignette (darker at edges)
+  if (options.vignette !== false) {
+    ctx.save();
+    var vg = ctx.createRadialGradient(x + w / 2, y + h / 2, Math.min(w, h) * 0.25, x + w / 2, y + h / 2, Math.max(w, h) * 0.7);
+    vg.addColorStop(0, 'transparent');
+    vg.addColorStop(1, 'rgba(160,130,100,0.04)');
+    ctx.fillStyle = vg;
+    roundRect(ctx, x, y, w, h, r);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  if (!noBorder) {
+    ctx.save();
+    ctx.strokeStyle = options.borderColor || C.songBorder;
+    ctx.lineWidth = 0.3;
+    roundRect(ctx, x + 0.5, y + 0.5, w - 1, h - 1, r - 0.5);
+    ctx.stroke();
+    ctx.restore();
+  }
+}
+
+export function drawSongBtn(ctx, x, y, w, h, text, options) {
+  options = options || {};
+  var bgColor = options.bgColor || C.songCeladon;
+  var textColor = options.textColor || C.songInk;
+  var fontSize = options.fontSize || 14;
+  var r = options.r || 8;
+  var pressed = options.pressed || false;
+  var fontStyle = options.fontStyle || 'sans';
+
+  if (pressed) {
+    bgColor = darken(bgColor, 0.08);
+  }
+
+  ctx.save();
+  roundRect(ctx, x, y, w, h, r);
+  ctx.fillStyle = bgColor;
+  ctx.fill();
+
+  // Subtle top edge highlight
+  ctx.fillStyle = 'rgba(255,255,248,0.15)';
+  roundRect(ctx, x + 2, y + 1, w - 4, h * 0.35, Math.min(r, h * 0.35));
+  ctx.fill();
+
+  // Inner shadow (bottom edge)
+  var g = ctx.createLinearGradient(x, y + h - 4, x, y + h);
+  g.addColorStop(0, 'transparent');
+  g.addColorStop(1, 'rgba(60,45,30,0.08)');
+  ctx.fillStyle = g;
+  roundRect(ctx, x + 1, y + h - 4, w - 2, 4, 0);
+  ctx.fill();
+
+  ctx.restore();
+
+  ctx.save();
+  ctx.fillStyle = textColor;
+  var fSize = fs(ctx.canvas.width, fontSize);
+  var fam = fontStyle === 'sans' ? '"PingFang SC", "Microsoft YaHei", sans-serif' : '"SimSun", serif';
+  ctx.font = 'bold ' + fSize + 'px ' + fam;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, x + w / 2, y + h / 2);
+  ctx.restore();
+}
+
+export function getFont(cw, px, style) {
+  style = style || 'song';
+  var s = fs(cw, px);
+  if (style === 'sans' || s < 13) {
+    return s + 'px "PingFang SC", "Microsoft YaHei", sans-serif';
+  }
+  return s + 'px "SimSun", serif';
 }
 
 export function drawGuofengBtn(ctx, x, y, w, h, text, options) {
@@ -579,7 +691,7 @@ export function drawCalligraphy(ctx, text, x, y, maxW, options) {
 
   // Simulated brush texture: slight shadow offset
   if (options.brushEffect !== false) {
-    ctx.shadowColor = 'rgba(44,44,44,0.12)';
+    ctx.shadowColor = 'rgba(60,45,30,0.12)';
     ctx.shadowBlur = 1.5;
     ctx.shadowOffsetX = 0.5;
     ctx.shadowOffsetY = 0.5;
@@ -629,7 +741,7 @@ export function drawGuofengToast(ctx, w, h, text, alpha) {
 
   // Background pill with guofeng border
   drawPaperCard(ctx, tx, ty, tw, th, th / 2, {
-    bgColor: 'rgba(44,44,44,0.82)',
+    bgColor: 'rgba(60,45,30,0.82)',
     noBorder: false,
     borderColor: C.goldLight,
     shadowBlur: 10,

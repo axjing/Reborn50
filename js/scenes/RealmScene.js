@@ -1,7 +1,7 @@
 import { STATUS, REALMS } from '../utils/constants.js';
 import {
   C, drawBg, drawCard, roundRect, fs, drawInkBtn,
-  drawMist, drawSparkle, drawStars,
+  drawMist, drawSparkle, drawStars, getFont,
 } from '../utils/color.js';
 import { StorageManager } from '../systems/StorageManager.js';
 import { ParticleSystem } from '../entities/Particle.js';
@@ -17,6 +17,7 @@ export class RealmScene {
     this._pts = new ParticleSystem();
     this._alpha = 0;
     this._textAlpha = 0;
+    this._realmUpPlayed = false;
   }
 
   onEnter(data) {
@@ -27,6 +28,7 @@ export class RealmScene {
     this._phase = 0;
     this._alpha = 0;
     this._textAlpha = 0;
+    this._realmUpPlayed = false;
     this._pts = new ParticleSystem();
   }
 
@@ -50,7 +52,10 @@ export class RealmScene {
     }
 
     if (this._phase === 1) {
-      if (this._textAlpha < 0.1 && this.sm.audio) this.sm.audio.playRealmUp();
+      if (!this._realmUpPlayed && this.sm.audio) {
+        this.sm.audio.playRealmUp();
+        this._realmUpPlayed = true;
+      }
       this._textAlpha = Math.min(1, this._textAlpha + dt * 0.8);
       if (this._timer > 2.5) {
         this._phase = 2;
@@ -86,30 +91,30 @@ export class RealmScene {
       ctx.globalAlpha = this._textAlpha;
 
       ctx.fillStyle = C.inkMuted;
-      ctx.font = fs(w, 16) + 'px "SimSun", "KaiTi", serif';
+      ctx.font = getFont(w, 16, 'song');
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText('境界突破', w / 2, h * 0.32);
 
       ctx.fillStyle = C.inkLight;
-      ctx.font = fs(w, 14) + 'px "SimSun", "KaiTi", serif';
+      ctx.font = getFont(w, 14, 'song');
       ctx.fillText(oldRealm.name + ' →', w / 2, h * 0.40);
 
       ctx.fillStyle = realm.color;
-      ctx.font = 'bold ' + fs(w, 30) + 'px "SimSun", "KaiTi", serif';
+      ctx.font = getFont(w, 30, 'song');
       ctx.fillText(realm.name, w / 2, h * 0.50);
 
       ctx.fillStyle = C.inkLight;
-      ctx.font = fs(w, 16) + 'px "SimSun", "KaiTi", serif';
+      ctx.font = getFont(w, 16, 'song');
       ctx.fillText('「' + realm.title + '」', w / 2, h * 0.60);
 
       ctx.fillStyle = C.inkMuted;
-      ctx.font = fs(w, 13) + 'px "SimSun", "KaiTi", serif';
+      ctx.font = getFont(w, 13, 'sans');
       ctx.fillText(realm.desc, w / 2, h * 0.70);
 
       if (this._phase >= 2) {
         ctx.fillStyle = C.inkMuted;
-        ctx.font = fs(w, 11) + 'px sans-serif';
+        ctx.font = getFont(w, 11, 'sans');
         ctx.fillText('点击继续修行', w / 2, h * 0.82);
       }
     }

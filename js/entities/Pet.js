@@ -123,8 +123,9 @@ export class Pet {
     if (Math.abs(this._squishY) < 0.01) this._squishY = 0;
     if (this._growthPop > 0) this._growthPop -= dt * 2;
 
-    this._microMoveX = Math.sin(this.timer * 0.3) * 1.2;
-    this._microMoveY = Math.sin(this.timer * 0.5 + 0.5) * 0.8;
+    var idleFloatScale = this.state === 'sleep' ? 0.3 : 1;
+    this._microMoveX = Math.sin(this.timer * 0.3) * 2.0 * idleFloatScale;
+    this._microMoveY = Math.sin(this.timer * 0.5 + 0.5) * 1.5 * idleFloatScale;
 
     this._idleActionTimer -= dt;
     if (this._idleActionTimer <= 0) {
@@ -168,7 +169,7 @@ export class Pet {
     var special = SPECIAL_SKINS[this._skinTier];
     var c = special || baseColors;
 
-    var breath = Math.sin(this.timer * 3) * 0.04;
+    var breath = Math.sin(this.timer * 3) * 0.05;
     var blink = (this.blinkTimer % 4) > 3.85 ? 0.15 : 1;
     var bounce = 0;
     var earAngle = 0;
@@ -177,6 +178,7 @@ export class Pet {
     if (this.state === 'happy') {
       bounce = Math.sin(this.timer * 10) * 1.5;
       earAngle = -0.15;
+      earTwitch *= 1.5;
     }
     if (this.state === 'excited') {
       bounce = -Math.abs(Math.sin(this.timer * 12)) * 2.5;
@@ -241,6 +243,16 @@ export class Pet {
     ctx.closePath();
     ctx.fillStyle = c.body;
     ctx.fill();
+
+    // 3D body shading
+    var g = ctx.createRadialGradient(-r * 0.3, -r * 0.3, r * 0.1, 0, 0, r);
+    g.addColorStop(0, 'rgba(255,255,255,0.2)');
+    g.addColorStop(0.4, 'rgba(255,255,255,0)');
+    g.addColorStop(0.7, 'rgba(0,0,0,0)');
+    g.addColorStop(1, 'rgba(0,0,0,0.08)');
+    ctx.fillStyle = g;
+    ctx.fill();
+
     ctx.stroke();
     ctx.restore();
 
@@ -249,7 +261,8 @@ export class Pet {
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
     for (var t = 0; t < TAIL_COUNTS[stage]; t++) {
-      var tt = this.timer * (3 + (special ? 1 : 0));
+      var wagSpeed = (this.state === 'excited' || this.state === 'happy') ? 1.8 : 1;
+      var tt = this.timer * (3 + (special ? 1 : 0)) * wagSpeed;
       var tw = Math.sin(tt + t * 1.5) * r * 0.15;
       var tw2 = Math.sin(tt * 1.2 + t * 2 + 0.5) * r * 0.08;
       ctx.lineWidth = r * 0.22 - t * r * 0.02;
@@ -363,7 +376,7 @@ export class Pet {
 
     // Eyes
     var eyeY = -r * 0.06;
-    var eyeR = r * 0.17;
+    var eyeR = r * 0.21;
     ctx.fillStyle = '#2C2C2C';
 
     var eyeShiftX = 0;
@@ -381,24 +394,53 @@ export class Pet {
       eyeR *= 1.1;
     }
 
+    var isHappy = this.state === 'happy' || this.state === 'excited';
     if (blink < 0.5) {
       var blY = eyeY + eyeShiftY;
       ctx.fillRect(-r * 0.38 - eyeR + eyeShiftX, blY, eyeR * 2, Math.max(1, blink * eyeR * 2));
       ctx.fillRect(r * 0.38 - eyeR + eyeShiftX, blY, eyeR * 2, Math.max(1, blink * eyeR * 2));
     } else {
+      var eyeBright = isHappy ? 1.15 : 1;
+      var curEyeR = eyeR * eyeBright;
       ctx.beginPath();
-      ctx.arc(-r * 0.33 + eyeShiftX, eyeY + eyeShiftY, eyeR, 0, Math.PI * 2);
+      ctx.arc(-r * 0.33 + eyeShiftX, eyeY + eyeShiftY, curEyeR, 0, Math.PI * 2);
       ctx.fill();
       ctx.beginPath();
-      ctx.arc(r * 0.33 + eyeShiftX, eyeY + eyeShiftY, eyeR, 0, Math.PI * 2);
+      ctx.arc(r * 0.33 + eyeShiftX, eyeY + eyeShiftY, curEyeR, 0, Math.PI * 2);
       ctx.fill();
+
+      // Main highlight
+      var hl1R = isHappy ? r * 0.08 : r * 0.07;
+      var hl1Off = isHappy ? 0.32 : 0.35;
       ctx.fillStyle = '#fff';
       ctx.beginPath();
-      ctx.arc(-r * 0.33 + eyeShiftX + eyeR * 0.35, eyeY + eyeShiftY - eyeR * 0.3, r * 0.07, 0, Math.PI * 2);
+      ctx.arc(-r * 0.33 + eyeShiftX + curEyeR * hl1Off, eyeY + eyeShiftY - curEyeR * 0.3, hl1R, 0, Math.PI * 2);
       ctx.fill();
       ctx.beginPath();
-      ctx.arc(r * 0.33 + eyeShiftX + eyeR * 0.35, eyeY + eyeShiftY - eyeR * 0.3, r * 0.07, 0, Math.PI * 2);
+      ctx.arc(r * 0.33 + eyeShiftX + curEyeR * hl1Off, eyeY + eyeShiftY - curEyeR * 0.3, hl1R, 0, Math.PI * 2);
       ctx.fill();
+
+      // Secondary highlight (smaller, upper-left)
+      ctx.fillStyle = 'rgba(255,255,255,0.6)';
+      ctx.beginPath();
+      ctx.arc(-r * 0.33 + eyeShiftX - curEyeR * 0.2, eyeY + eyeShiftY - curEyeR * 0.35, r * 0.035, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(r * 0.33 + eyeShiftX - curEyeR * 0.2, eyeY + eyeShiftY - curEyeR * 0.35, r * 0.035, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Happy/excited extra sparkle
+      if (isHappy) {
+        ctx.fillStyle = '#fff';
+        ctx.globalAlpha = 0.3 + Math.sin(this.timer * 6) * 0.15;
+        ctx.beginPath();
+        ctx.arc(-r * 0.33 + eyeShiftX + curEyeR * 0.5, eyeY + eyeShiftY - curEyeR * 0.1, r * 0.025, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(r * 0.33 + eyeShiftX + curEyeR * 0.5, eyeY + eyeShiftY - curEyeR * 0.1, r * 0.025, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+      }
 
       // Special skin: extra sparkle in eyes
       if (special && this._evolved) {
@@ -430,6 +472,12 @@ export class Pet {
     ctx.arc(0, 0, r * 0.08, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
+
+    // Nose
+    ctx.fillStyle = special ? c.ear : '#D48B8B';
+    ctx.beginPath();
+    ctx.arc(0, r * 0.12, r * 0.035, 0, Math.PI * 2);
+    ctx.fill();
 
     // Mouth
     ctx.strokeStyle = special ? c.ear : C.inkLight;

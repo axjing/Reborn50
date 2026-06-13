@@ -1,6 +1,6 @@
 import { STATUS } from '../utils/constants.js';
 import { STORY_EPISODES } from './story-data.js';
-import { C, drawBg, drawPaperCard, drawGuofengBtn, drawSeal, drawGuofengToast, fs, roundRect } from '../utils/color.js';
+import { C, drawBg, drawSongCard, drawSongBtn, getFont, drawSeal, drawGuofengToast, fs, roundRect } from '../utils/color.js';
 import { StorageManager } from '../systems/StorageManager.js';
 
 export class StoryScene {
@@ -41,11 +41,11 @@ export class StoryScene {
     drawBg(ctx, w, h);
     ctx.save();
     ctx.globalAlpha = 0.92;
-    drawPaperCard(ctx, 4, 4, w - 8, h - 8, 8);
+    drawSongCard(ctx, 4, 4, w - 8, h - 8, 8, { bgColor: C.songCard });
     ctx.restore();
 
     ctx.fillStyle = C.ink;
-    ctx.font = 'bold ' + fs(w, 20) + 'px "SimSun", "KaiTi", serif';
+    ctx.font = getFont(w, 20, 'song');
     ctx.textAlign = 'center';
     ctx.textBaseline = 'top';
     ctx.fillText('江湖纪事', w / 2, 14);
@@ -106,34 +106,34 @@ export class StoryScene {
       ctx.fill();
       ctx.globalAlpha = 1;
       ctx.fillStyle = unlocked ? C.zhuSha : C.inkMuted;
-      ctx.font = fs(w, 11) + 'px "SimSun", "KaiTi", serif';
+      ctx.font = getFont(w, 11, 'sans');
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText('第' + ep.day + '日', badgeX + badgeSize / 2, badgeY + badgeSize / 2);
 
       ctx.fillStyle = unlocked ? C.ink : C.inkMuted;
-      ctx.font = 'bold ' + fs(w, 14) + 'px "SimSun", "KaiTi", serif';
+      ctx.font = getFont(w, 14, 'song');
       ctx.textAlign = 'left';
       ctx.textBaseline = 'middle';
       ctx.fillText(ep.title, badgeX + badgeSize + 10, y + ITEM_H / 2 - 6);
 
       ctx.fillStyle = unlocked ? C.inkLight : C.inkMuted;
-      ctx.font = fs(w, 9) + 'px "SimSun", "KaiTi", serif';
+      ctx.font = getFont(w, 9, 'sans');
       ctx.textAlign = 'left';
       ctx.fillText('# ' + ep.tokens.join(' · '), badgeX + badgeSize + 10, y + ITEM_H / 2 + 12);
 
       ctx.textAlign = 'right';
       if (!unlocked) {
         ctx.fillStyle = C.inkMuted;
-        ctx.font = fs(w, 12) + 'px sans-serif';
+        ctx.font = getFont(w, 12, 'sans');
         ctx.fillText('封', w - 20, y + ITEM_H / 2);
       } else if (read) {
         ctx.fillStyle = C.jade;
-        ctx.font = fs(w, 12) + 'px "SimSun", "KaiTi", serif';
+        ctx.font = getFont(w, 12, 'sans');
         ctx.fillText('已阅', w - 20, y + ITEM_H / 2);
       } else {
         ctx.fillStyle = C.gold;
-        ctx.font = 'bold ' + fs(w, 12) + 'px sans-serif';
+        ctx.font = getFont(w, 12, 'sans');
         ctx.fillText('NEW', w - 20, y + ITEM_H / 2);
       }
     }
@@ -143,15 +143,14 @@ export class StoryScene {
     if (this._maxScroll > 0) {
       var barH = Math.max(20, viewH * viewH / totalH);
       var barY = viewY + (this._scrollOffset / this._maxScroll) * (viewH - barH);
-      ctx.fillStyle = 'rgba(44,44,44,0.15)';
+      ctx.fillStyle = 'rgba(60,45,30,0.15)';
       roundRect(ctx, w - 14, barY, 4, barH, 2);
       ctx.fill();
     }
 
-    drawGuofengBtn(ctx, 14, h - 46, 80, 34, '返回', {
-      bgColor: C.inkLight,
+    drawSongBtn(ctx, 14, h - 46, 80, 34, '返回', {
+      bgColor: C.songInkLight,
       fontSize: 13,
-      doubleBorder: false,
     });
   }
 
@@ -160,13 +159,13 @@ export class StoryScene {
     if (!ep) return;
 
     ctx.fillStyle = C.ink;
-    ctx.font = 'bold ' + fs(w, 17) + 'px "SimSun", "KaiTi", serif';
+    ctx.font = getFont(w, 17, 'song');
     ctx.textAlign = 'center';
     ctx.textBaseline = 'top';
     ctx.fillText('第' + ep.day + '日 · ' + ep.title, w / 2, 52);
 
     ctx.fillStyle = C.inkLight;
-    ctx.font = fs(w, 11) + 'px "SimSun", "KaiTi", serif';
+    ctx.font = getFont(w, 11, 'sans');
     ctx.fillText('# ' + ep.tokens.join('  '), w / 2, 78);
 
     var bodyX = 18;
@@ -185,7 +184,7 @@ export class StoryScene {
 
     ctx.fillStyle = C.ink;
     var txtSize = fs(w, 13);
-    ctx.font = txtSize + 'px "SimSun", "KaiTi", serif';
+    ctx.font = getFont(w, 13, 'sans');
     ctx.textAlign = 'left';
     ctx.textBaseline = 'top';
 
@@ -217,27 +216,24 @@ export class StoryScene {
     var epCount = STORY_EPISODES.length;
 
     if (this._selectedDay > 1) {
-      drawGuofengBtn(ctx, 14, btnY, 90, btnH, '上一集', {
-        bgColor: C.jadeLight,
+      drawSongBtn(ctx, 14, btnY, 90, btnH, '上一集', {
+        bgColor: C.songCeladon,
         fontSize: 12,
-        doubleBorder: false,
-        textColor: C.ink,
+        textColor: C.songInk,
       });
     }
 
     if (this._selectedDay < epCount) {
-      drawGuofengBtn(ctx, w - 14 - 90, btnY, 90, btnH, '下一集', {
-        bgColor: C.jadeLight,
+      drawSongBtn(ctx, w - 14 - 90, btnY, 90, btnH, '下一集', {
+        bgColor: C.songCeladon,
         fontSize: 12,
-        doubleBorder: false,
-        textColor: C.ink,
+        textColor: C.songInk,
       });
     }
 
-    drawGuofengBtn(ctx, (w - 60) / 2, btnY, 60, btnH, '返回', {
-      bgColor: C.inkLight,
+    drawSongBtn(ctx, (w - 60) / 2, btnY, 60, btnH, '返回', {
+      bgColor: C.songInkLight,
       fontSize: 12,
-      doubleBorder: false,
     });
   }
 
@@ -303,7 +299,8 @@ export class StoryScene {
   _checkListTap(x, y) {
     var w = this.sm.canvas.width;
     var h = this.sm.canvas.height;
-    var SLOT = 60;
+    var ITEM_H = 56, ITEM_GAP = 4;
+    var SLOT = ITEM_H + ITEM_GAP;
     var headerH = 48;
     var navH = 50;
     var viewY = headerH + 8;

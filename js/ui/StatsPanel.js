@@ -16,7 +16,7 @@ export class StatsPanel {
     var ch = ctx.canvas.height;
 
     ctx.save();
-    ctx.fillStyle = 'rgba(44,44,44,0.5)';
+    ctx.fillStyle = 'rgba(60,45,30,0.5)';
     ctx.fillRect(0, 0, cw, ch);
 
     var pw = Math.min(300, cw - 40);

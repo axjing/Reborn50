@@ -20,7 +20,7 @@ export class ProgressBar {
     ctx.shadowColor = C.shadow;
     ctx.shadowBlur = 4;
     roundRect(ctx, this.x, this.y, this.w, this.h, this.h / 2);
-    ctx.fillStyle = 'rgba(44,44,44,0.06)';
+    ctx.fillStyle = 'rgba(60,45,30,0.06)';
     ctx.fill();
     ctx.shadowBlur = 0;
 

@@ -1,7 +1,7 @@
-import { STATUS, STAT_LABELS } from '../utils/constants.js';
+import { STATUS } from '../utils/constants.js';
 import {
   C, drawBg, drawCard, roundRect, fs, drawInkBtn,
-  drawMist, drawSparkle,
+  drawMist, drawSparkle, getFont,
 } from '../utils/color.js';
 import { StorageManager } from '../systems/StorageManager.js';
 import { ParticleSystem } from '../entities/Particle.js';
@@ -111,13 +111,13 @@ export class MiniGameScene {
     ctx.restore();
 
     ctx.fillStyle = C.ink;
-    ctx.font = 'bold ' + fs(w, 18) + 'px "SimSun", "KaiTi", serif';
+    ctx.font = getFont(w, 18, 'song');
     ctx.textAlign = 'center';
     ctx.textBaseline = 'top';
     ctx.fillText('水墨翻牌', w / 2, 14);
 
     ctx.fillStyle = C.inkMuted;
-    ctx.font = fs(w, 11) + 'px sans-serif';
+    ctx.font = getFont(w, 11, 'sans');
     ctx.fillText('翻牌配对  |  步数: ' + this._moves + '  |  已配对: ' + this._pairsFound + '/' + (TOTAL_CARDS / 2), w / 2, 38);
 
     this._drawGrid(ctx, w);
@@ -131,7 +131,7 @@ export class MiniGameScene {
 
     if (this._showResult) {
       ctx.save();
-      ctx.fillStyle = 'rgba(44,44,44,0.5)';
+      ctx.fillStyle = 'rgba(60,45,30,0.5)';
       ctx.fillRect(0, 0, w, h);
 
       var rw = Math.min(280, w - 40);
@@ -141,21 +141,21 @@ export class MiniGameScene {
       drawCard(ctx, rx, ry, rw, rh, 14);
 
       ctx.fillStyle = C.gold;
-      ctx.font = 'bold ' + fs(w, 22) + 'px "SimSun", "KaiTi", serif';
+      ctx.font = getFont(w, 22, 'song');
       ctx.textAlign = 'center';
       ctx.textBaseline = 'top';
       ctx.fillText('翻牌圆满', w / 2, ry + 16);
 
       ctx.fillStyle = C.inkLight;
-      ctx.font = fs(w, 13) + 'px "SimSun", "KaiTi", serif';
+      ctx.font = getFont(w, 13, 'sans');
       ctx.fillText('步数: ' + this._moves + '  |  修为 +' + this._rewardExp, w / 2, ry + 50);
 
       ctx.fillStyle = C.jade;
-      ctx.font = fs(w, 12) + 'px "SimSun", "KaiTi", serif';
+      ctx.font = getFont(w, 12, 'sans');
       ctx.fillText('顿悟 +2  ·  心境 +1', w / 2, ry + 76);
 
       ctx.fillStyle = C.inkMuted;
-      ctx.font = fs(w, 11) + 'px sans-serif';
+      ctx.font = getFont(w, 11, 'sans');
 
       if (this._resultTimer <= 0) {
         drawInkBtn(ctx, (w - 120) / 2, ry + rh - 50, 120, 36, '返回江湖', C.red);

@@ -2,8 +2,9 @@ import { STATUS, TOTAL_DAYS, REALMS, XINFA_LIST, SCENES_CONFIG, STAT_LABELS } fr
 import {
   C, roundRect, fs,
   drawMountain, drawMist, drawSparkle, drawStars, drawTree,
-  drawFallingLeaves, drawPaperTexture, drawInkWash, drawPaperCard, drawGuofengBtn,
+  drawFallingLeaves, drawPaperTexture, drawInkWash,
   drawGuofengIcon, drawSeal, drawCalligraphy, drawGuofengToast,
+  drawSongCard, drawSongBtn, getFont,
 } from '../utils/color.js';
 import { Player } from '../entities/Player.js';
 import { StorageManager } from '../systems/StorageManager.js';
@@ -41,6 +42,7 @@ export class HomeScene {
     this._timeOfDay = 0;
     this._sceneTimer = 0;
     this._birdPositions = [];
+    this._pressedBtn = null;
   }
 
   onEnter(data) {
@@ -81,13 +83,13 @@ export class HomeScene {
     this._dayComplete = false;
 
     this._initTodo();
-    this._pet.loadFromPlayer(this.player);
-    this._petX = w - 50;
-    this._petY = 42;
-    this._isDraggingPet = false;
-    this._buildButtons(w);
-
     var h = this.sm.canvas.height;
+    this._pet.loadFromPlayer(this.player);
+    this._petX = w / 2;
+    this._petY = Math.min(h * 0.48, h - 160);
+    this._isDraggingPet = false;
+    this._pressedBtn = null;
+    this._buildButtons(w);
     this._timeOfDay = 0;
     this._sceneTimer = 0;
     this._birdPositions = [];
@@ -105,18 +107,32 @@ export class HomeScene {
 
   _buildButtons(w) {
     var h = this.sm.canvas.height;
-    var bw = Math.min(64, (w - 44) / 4);
-    var bh = 32;
-    var gap = Math.max(2, (w - 28 - bw * 4) / 3);
-    var rowY = h - 52;
-
-    this._buttons = [
-      { x: 14, y: rowY, w: bw, h: bh, text: '剧情', color: C.sky, action: 'story' },
-      { x: 14 + (bw + gap), y: rowY, w: bw, h: bh, text: '奇遇', color: C.earth, action: 'adventure' },
-      { x: 14 + (bw + gap) * 2, y: rowY, w: bw, h: bh, text: '翻牌', color: C.purple, action: 'minigame' },
-      { x: 14 + (bw + gap) * 3, y: rowY, w: bw, h: bh, text: '手账', color: C.inkMuted, action: 'history' },
-      { x: w - 14 - bw, y: rowY - bh - 8, w: bw, h: bh, text: '属性', color: C.jade, action: 'stats' },
+    var btnW = 54;
+    var btnH = 38;
+    var gap = 12;
+    var actions = [
+      { label: '卷', action: 'story', hint: '江湖纪事', color: C.songCeladon },
+      { label: '遇', action: 'adventure', hint: '江湖奇遇', color: C.songTea },
+      { label: '牌', action: 'minigame', hint: '灵牌翻翻', color: C.songMutedRed },
+      { label: '账', action: 'history', hint: '修行手账', color: C.songInkLight },
+      { label: '属', action: 'stats', hint: '人物属性', color: C.songGold },
     ];
+    var totalW = actions.length * btnW + (actions.length - 1) * gap;
+    var startX = (w - totalW) / 2;
+    var y = h - 60;
+    this._buttons = [];
+    for (var i = 0; i < actions.length; i++) {
+      this._buttons.push({
+        x: startX + i * (btnW + gap),
+        y: y,
+        w: btnW,
+        h: btnH,
+        label: actions[i].label,
+        action: actions[i].action,
+        hint: actions[i].hint,
+        color: actions[i].color,
+      });
+    }
   }
 
   update(dt) {
@@ -151,80 +167,77 @@ export class HomeScene {
 
     this._drawScene(ctx, w, h);
 
+    // Main content card (lighter, no accent)
+    var cardX = 12, cardY = 10, cardW = w - 24, cardH = h - 20;
     ctx.save();
-    ctx.globalAlpha = 0.88;
-    drawPaperCard(ctx, 8, 6, w - 16, h - 12, 12, { accent: C.jade, accentSide: 'left', shadowBlur: 12 });
+    ctx.globalAlpha = 0.92;
+    drawSongCard(ctx, cardX, cardY, cardW, cardH, 10, { bgColor: C.songCard, shadow: true });
     ctx.restore();
 
     this._drawHeader(ctx, w, p);
 
-    // Pet growth & positioning
-    var petBaseSize = 28;
+    // Todo as centerpiece
+    this._drawTodo(ctx, w, p);
+
+    // Calendar grid (always visible)
+    this._drawCalendarGrid(ctx, w, p);
+
+    // Pet (initial position between todo and calendar)
+    var petBaseSize = 32;
     var petSize = petBaseSize * this._pet.sizeMul;
     var halfSize = petSize / 2;
-    // Keep pet within safe zone: right side, never overlap header/progress bar
-    var safeRight = w - 14;
+    var safeRight = cardX + cardW - 10;
     var petCenterX = Math.min(this._petX, safeRight - halfSize);
     var petCenterY = this._petY;
-    // Lower the pet as it grows to avoid clipping into content
     if (petSize > 35) petCenterY = this._petY + (petSize - 35) * 0.5;
 
-    // Growth progress ring (behind pet)
     ctx.save();
-    var ringR = halfSize + 8;
+    var ringR = halfSize + 12;
     var ringPct = this._pet.growth / this._pet.maxGrowth;
-    ctx.strokeStyle = 'rgba(44,44,44,0.08)';
-    ctx.lineWidth = 2.5;
+    ctx.strokeStyle = 'rgba(60,45,30,0.06)';
+    ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.arc(petCenterX, petCenterY, ringR, 0, Math.PI * 2);
     ctx.stroke();
     if (ringPct > 0) {
-      ctx.strokeStyle = ringPct >= 1 ? C.gold : C.jadeLight;
-      ctx.lineWidth = 2.5;
+      ctx.strokeStyle = ringPct >= 1 ? C.songGold : C.jadeLight;
+      ctx.lineWidth = 2;
       ctx.beginPath();
       ctx.arc(petCenterX, petCenterY, ringR, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * ringPct);
       ctx.stroke();
     }
     ctx.restore();
+    try {
+      this._pet.draw(ctx, petCenterX, petCenterY, petSize, p.completedDays);
+    } catch (petErr) {
+      console.error('Pet draw error:', petErr);
+    }
 
-    this._pet.draw(ctx, petCenterX, petCenterY, petSize, p.completedDays);
-
-    // Skin name badge
     var skinInfo = this._pet.skinInfo;
     if (skinInfo) {
       ctx.save();
-      ctx.fillStyle = C.white;
-      ctx.globalAlpha = 0.75 + Math.sin(this._timer * 2) * 0.15;
-      var badgeX = petCenterX;
-      var badgeY = petCenterY + halfSize + 6;
-      ctx.font = 'bold ' + fs(w, 7) + 'px "SimSun", "KaiTi", serif';
+      ctx.fillStyle = C.songCard;
+      ctx.globalAlpha = 0.7 + Math.sin(this._timer * 2) * 0.12;
+      ctx.font = 'bold ' + getFont(w, 7, 'sans');
       ctx.textAlign = 'center';
       ctx.textBaseline = 'top';
-      ctx.shadowColor = 'rgba(0,0,0,0.3)';
-      ctx.shadowBlur = 3;
-      ctx.fillText('[' + skinInfo.desc + ']', badgeX, badgeY);
+      ctx.fillText('[' + skinInfo.desc + ']', petCenterX, petCenterY + halfSize + 6);
       ctx.restore();
     }
 
-    // Growth percentage text
     ctx.save();
-    ctx.fillStyle = C.inkMuted;
-    ctx.globalAlpha = 0.5;
+    ctx.fillStyle = C.songInkLight;
+    ctx.globalAlpha = 0.4;
     ctx.font = fs(w, 6) + 'px sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'top';
-    var gpct = Math.round(this._pet.growth / this._pet.maxGrowth * 100);
-    ctx.fillText(gpct + '%', petCenterX, petCenterY + halfSize + (skinInfo ? 14 : 6));
+    ctx.fillText(Math.round(this._pet.growth / this._pet.maxGrowth * 100) + '%', petCenterX, petCenterY + halfSize + (skinInfo ? 14 : 6));
     ctx.restore();
 
-    var m = this._getTodoMetrics(w);
-    this._drawDivider(ctx, w, m.titleY - 2);
-    this._drawTodo(ctx, w, p);
-    this._drawDivider(ctx, w, m.calY - 2);
-    var calEnd = this._drawCalendar(ctx, w, p);
-    this._drawDivider(ctx, w, calEnd);
+    // Bottom nav buttons
     this._drawNav(ctx);
 
+    // Float texts (stat popups)
     for (var i = 0; i < this._floatTexts.length; i++) {
       var ft = this._floatTexts[i];
       ctx.save();
@@ -412,10 +425,10 @@ export class HomeScene {
   _drawDivider(ctx, w, y) {
     ctx.save();
     var g = ctx.createLinearGradient(20, y, w - 20, y);
-    g.addColorStop(0, 'rgba(44,44,44,0)');
-    g.addColorStop(0.15, 'rgba(44,44,44,0.06)');
-    g.addColorStop(0.85, 'rgba(44,44,44,0.06)');
-    g.addColorStop(1, 'rgba(44,44,44,0)');
+    g.addColorStop(0, 'rgba(60,45,30,0)');
+    g.addColorStop(0.15, 'rgba(60,45,30,0.06)');
+    g.addColorStop(0.85, 'rgba(60,45,30,0.06)');
+    g.addColorStop(1, 'rgba(60,45,30,0)');
     ctx.strokeStyle = g;
     ctx.lineWidth = 0.5;
     ctx.beginPath();
@@ -425,6 +438,36 @@ export class HomeScene {
     ctx.restore();
   }
 
+  _drawNav(ctx) {
+    var w = ctx.canvas.width;
+
+    // Decorative dots above each button
+    ctx.save();
+    for (var j = 0; j < this._buttons.length; j++) {
+      var bd = this._buttons[j];
+      ctx.fillStyle = 'rgba(60,45,30,0.08)';
+      ctx.beginPath();
+      ctx.arc(bd.x + bd.w / 2, bd.y - 3, 1.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = 'rgba(60,45,30,0.04)';
+      ctx.beginPath();
+      ctx.arc(bd.x + bd.w / 2, bd.y - 6, 1, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+
+    for (var i = 0; i < this._buttons.length; i++) {
+      var b = this._buttons[i];
+      var pressed = this._pressedBtn === 'nav_' + b.action;
+      drawSongBtn(ctx, b.x, b.y, b.w, b.h, b.label, {
+        bgColor: pressed ? C.songInkLight : b.color,
+        textColor: C.songCard,
+        r: b.h / 2,
+        fontSize: 16,
+      });
+    }
+  }
+
   _drawHeader(ctx, w, p) {
     // Title with calligraphy style
     ctx.save();
@@ -432,12 +475,12 @@ export class HomeScene {
     ctx.font = 'bold ' + fs(w, 16) + 'px "SimSun", "KaiTi", serif';
     ctx.textAlign = 'left';
     ctx.textBaseline = 'top';
-    ctx.shadowColor = 'rgba(44,44,44,0.1)';
+    ctx.shadowColor = 'rgba(60,45,30,0.1)';
     ctx.shadowBlur = 2;
-    ctx.fillText('Reborn · 江湖', 18, 12);
+    ctx.fillText('自律 · 江湖', 18, 12);
 
     ctx.fillStyle = REALM_COLORS[p.realm] || C.inkLight;
-    ctx.font = fs(w, 11) + 'px "SimSun", "KaiTi", serif';
+    ctx.font = getFont(w, 11, 'sans');
     ctx.textAlign = 'right';
     ctx.shadowBlur = 0;
     ctx.fillText(p.realmName + '  Lv.' + p.level, w - 18, 14);
@@ -452,7 +495,7 @@ export class HomeScene {
     var bw = w - 52;
     var bh = 8;
     roundRect(ctx, bx, by, bw, bh, bh / 2);
-    ctx.fillStyle = 'rgba(44,44,44,0.06)';
+    ctx.fillStyle = 'rgba(60,45,30,0.06)';
     ctx.fill();
     var ratio = Math.min(1, p.completedDays / TOTAL_DAYS);
     var fw = Math.max(0, (bw - 2) * ratio);
@@ -479,252 +522,225 @@ export class HomeScene {
     }
 
     ctx.fillStyle = C.gold;
-    ctx.font = 'bold ' + fs(w, 10) + 'px "SimSun", "KaiTi", serif';
+    ctx.font = 'bold ' + getFont(w, 10, 'sans');
     ctx.textAlign = 'left';
     ctx.textBaseline = 'top';
     ctx.fillText('⚡ ' + p.streak + '天连击', 18, 47);
 
     ctx.fillStyle = C.inkMuted;
-    ctx.font = fs(w, 9) + 'px "SimSun", "KaiTi", serif';
+    ctx.font = getFont(w, 9, 'sans');
     ctx.textAlign = 'right';
     ctx.fillText(p.completedDays + '/' + TOTAL_DAYS + '天', w - 18, 48);
   }
 
-  _getTodoMetrics(w) {
-    var titleY = 60;
-    var itemStart = titleY + 16;
-    var itemH = 24;
-    var count = XINFA_LIST.length;
-    var itemsEnd = itemStart + count * itemH;
-    var progY = itemsEnd + 4;
-    var progH = 14;
-    var btnH = 20;
-    var calY = progY + progH + 10 + btnH + 6;
-    return {
-      titleY: titleY,
-      itemStart: itemStart,
-      itemH: itemH,
-      count: count,
-      itemsEnd: itemsEnd,
-      progY: progY,
-      progH: progH,
-      btnH: btnH,
-      calY: calY,
-    };
-  }
-
   _drawTodo(ctx, w, p) {
-    var m = this._getTodoMetrics(w);
     var gap = 26;
+    var todoW = Math.min(w * 0.78, 320);
+    var todoX = (w - todoW) / 2;
+    var itemH = 28;
+    var count = XINFA_LIST.length;
+    var titleH = 16;
+    var titleY = 38;
+    var itemStart = titleY + titleH + 4;
+    var itemsEnd = itemStart + count * itemH;
+    var progH = 6;
+    var progY = itemsEnd + 4;
+    var btnH = 26;
+    var btnY = progY + progH + 4;
+    var cardH = btnY + btnH + 8 - titleY + 8;
 
-    // background card with paper texture
-    var cardH = m.progY + m.progH + m.btnH + 12 - (m.titleY - 8);
-    drawPaperCard(ctx, 14, m.titleY - 8, w - 28, cardH, 6, {
-      bgColor: 'rgba(250,246,238,0.55)',
+    // Centered card (lighter inset)
+    drawSongCard(ctx, todoX, titleY - 6, todoW, cardH, 8, {
+      bgColor: C.songPaper,
       noBorder: true,
-      noShadow: true,
-      accent: C.jade,
-      accentSide: 'left',
+      shadow: false,
     });
 
-    ctx.fillStyle = C.ink;
-    ctx.font = 'bold ' + fs(w, 14) + 'px "SimSun", "KaiTi", serif';
+    // Corner ornaments (traditional document brackets)
+    ctx.save();
+    ctx.strokeStyle = 'rgba(60,45,30,0.08)';
+    ctx.lineWidth = 1;
+    var tx = todoX, ty = titleY - 6, tw = todoW, th = cardH;
+    var cd = 10, cp = 5;
+    ctx.beginPath();
+    ctx.moveTo(tx + cd, ty + cp);
+    ctx.lineTo(tx + cp, ty + cp);
+    ctx.lineTo(tx + cp, ty + cd);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(tx + tw - cd, ty + cp);
+    ctx.lineTo(tx + tw - cp, ty + cp);
+    ctx.lineTo(tx + tw - cp, ty + cd);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(tx + cd, ty + th - cp);
+    ctx.lineTo(tx + cp, ty + th - cp);
+    ctx.lineTo(tx + cp, ty + th - cd);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(tx + tw - cd, ty + th - cp);
+    ctx.lineTo(tx + tw - cp, ty + th - cp);
+    ctx.lineTo(tx + tw - cp, ty + th - cd);
+    ctx.stroke();
+    ctx.restore();
+
+    // Title
+    ctx.fillStyle = C.songInk;
+    ctx.font = getFont(w, 13, 'song');
     ctx.textAlign = 'left';
     ctx.textBaseline = 'top';
-    ctx.fillText('今日修行 · 第 ' + (p.completedDays + 1) + ' 天', 28, m.titleY);
-
-    if (!p.completedToday && !this._dayComplete) {
-      ctx.fillStyle = C.inkMuted;
-      ctx.font = fs(w, 8) + 'px sans-serif';
-      ctx.textAlign = 'right';
-      ctx.fillText('详细 →', w - 22, m.titleY + 3);
-    }
+    ctx.fillText('今日修行 · 第 ' + (p.completedDays + 1) + ' 天', todoX + 12, titleY);
 
     if (p.completedToday) {
       ctx.fillStyle = C.jade;
-      ctx.font = fs(w, 10) + 'px sans-serif';
+      ctx.font = getFont(w, 9, 'sans');
       ctx.textAlign = 'right';
-      ctx.fillText('✓ 今日已毕', w - 22, m.titleY + 2);
+      ctx.fillText('✓ 今日已毕', todoX + todoW - 12, titleY + 2);
     }
 
-    for (var i = 0; i < m.count; i++) {
-      var y = m.itemStart + i * m.itemH;
+    // Todo items
+    for (var i = 0; i < count; i++) {
+      var y = itemStart + i * itemH;
       var done = this._todoDone[i];
       var xf = XINFA_LIST[i];
 
       if (done) {
         ctx.save();
-        roundRect(ctx, 16, y - 1, w - 32, m.itemH - 1, 4);
-        ctx.fillStyle = 'rgba(92,140,90,0.08)';
+        roundRect(ctx, todoX + 3, y, todoW - 6, itemH - 2, 4);
+        ctx.fillStyle = 'rgba(92,140,90,0.06)';
         ctx.fill();
-        ctx.strokeStyle = 'rgba(92,140,90,0.15)';
-        ctx.lineWidth = 0.5;
-        ctx.stroke();
         ctx.restore();
       }
 
-      ctx.fillStyle = done ? C.jade : C.inkMuted;
-      ctx.font = fs(w, 14) + 'px sans-serif';
+      ctx.fillStyle = done ? C.jade : C.songInkLight;
+      ctx.font = fs(w, 12) + 'px sans-serif';
       ctx.textAlign = 'left';
-      ctx.fillText(done ? '☑' : '☐', 22, y);
+      ctx.fillText(done ? '☑' : '☐', todoX + 10, y + 2);
 
-      ctx.fillStyle = done ? C.inkMuted : C.inkLight;
-      ctx.font = fs(w, 11) + 'px sans-serif';
-      ctx.fillText(TODO_ICONS[i] + ' ' + xf.name, 22 + gap, y);
+      ctx.fillStyle = done ? C.songInkLight : C.songInk;
+      ctx.font = getFont(w, 10, 'sans');
+      ctx.fillText(xf.name, todoX + 10 + gap, y + 2);
 
-      ctx.fillStyle = C.inkMuted;
-      ctx.font = fs(w, 9) + 'px sans-serif';
+      ctx.fillStyle = C.songInkLight;
+      ctx.font = fs(w, 8) + 'px sans-serif';
       ctx.textAlign = 'right';
-      ctx.fillText(xf.short, w - 22, y + 1);
+      ctx.fillText(xf.short, todoX + todoW - 10, y + 4);
     }
 
     var doneCount = 0;
-    for (var j = 0; j < m.count; j++) { if (this._todoDone[j]) doneCount++; }
-    var pW = w - 36;
+    for (var j = 0; j < count; j++) { if (this._todoDone[j]) doneCount++; }
 
-    // progress bar 14px tall
-    var progH = 14;
-    roundRect(ctx, 18, m.progY, pW, progH, progH / 2);
-    ctx.fillStyle = 'rgba(44,44,44,0.06)';
+    // Progress bar
+    var pW = todoW - 16;
+    roundRect(ctx, todoX + 8, progY, pW, progH, progH / 2);
+    ctx.fillStyle = 'rgba(60,45,30,0.05)';
     ctx.fill();
-    var pct = doneCount / m.count;
+    var pct = doneCount / count;
     if (pct > 0) {
-      roundRect(ctx, 19, m.progY + 1, Math.max(4, (pW - 2) * pct), progH - 2, (progH - 2) / 2);
-      var pg = ctx.createLinearGradient(18, 0, 18 + pW, 0);
+      roundRect(ctx, todoX + 9, progY + 1, Math.max(3, (pW - 2) * pct), progH - 2, (progH - 2) / 2);
+      var pg = ctx.createLinearGradient(todoX + 8, 0, todoX + 8 + pW, 0);
       pg.addColorStop(0, C.jade);
-      pg.addColorStop(0.6, C.gold);
-      pg.addColorStop(1, doneCount >= m.count ? C.goldLight : C.red);
+      pg.addColorStop(0.6, C.songGold);
+      pg.addColorStop(1, doneCount >= count ? C.goldLight : C.songMutedRed);
       ctx.fillStyle = pg;
       ctx.fill();
     }
 
-    // star rating (bigger)
-    var starY = m.progY + progH + 2;
+    // Inline star+count
     var starCount = doneCount >= 7 ? 3 : doneCount >= 4 ? 2 : doneCount >= 1 ? 1 : 0;
-    var allDone = doneCount >= m.count;
-    ctx.font = fs(w, 14) + 'px sans-serif';
-    ctx.textAlign = 'left';
     ctx.textBaseline = 'top';
-    for (var s = 0; s < 3; s++) {
-      if (allDone && s < starCount && this._pet._evolved) {
-        ctx.save();
-        ctx.shadowColor = C.gold;
-        ctx.shadowBlur = 6 + Math.sin(this._timer * 3 + s) * 3;
-        ctx.fillStyle = C.gold;
-        ctx.fillText(STAR_TEXTS[1], 56 + s * 18, starY);
-        ctx.restore();
-      } else {
-        ctx.fillStyle = s < starCount ? C.gold : C.inkMuted;
-        ctx.fillText(s < starCount ? STAR_TEXTS[1] : STAR_TEXTS[0], 56 + s * 18, starY);
-      }
-    }
-
-    // count text
-    ctx.fillStyle = C.inkMuted;
-    ctx.font = fs(w, 9) + 'px sans-serif';
+    ctx.font = fs(w, 11) + 'px sans-serif';
     ctx.textAlign = 'left';
-    ctx.fillText(doneCount + '/' + m.count, 18, starY + 1);
+    for (var s = 0; s < 3; s++) {
+      ctx.fillStyle = s < starCount ? C.songGold : C.songInkLight;
+      ctx.fillText(s < starCount ? STAR_TEXTS[1] : STAR_TEXTS[0], todoX + 12 + s * 16, btnY + 4);
+    }
+    ctx.fillStyle = C.songInkLight;
+    ctx.font = getFont(w, 8, 'sans');
+    ctx.fillText(doneCount + '/' + count, todoX + 12 + 54, btnY + 5);
 
+    // "完成修行" button
     if (!p.completedToday && doneCount > 0) {
-      var bx = w - 18 - 88;
-      var by = m.progY - 1;
-      var btnColor = doneCount >= m.count ? C.gold : C.zhuSha;
-      drawGuofengBtn(ctx, bx, by, doneCount >= m.count ? 100 : 88, doneCount >= m.count ? m.progH + 8 : m.progH + 6, '完成修行', {
+      var btnW = doneCount >= count ? 100 : 84;
+      var bx = todoX + todoW - btnW - 10;
+      var btnColor = doneCount >= count ? C.songGold : C.songMutedRed;
+      ctx.save();
+      drawSongBtn(ctx, bx, btnY, btnW, btnH, '完成修行', {
         bgColor: btnColor,
-        fontSize: 12,
-        doubleBorder: doneCount >= m.count,
-        cornerDecor: false,
+        textColor: doneCount >= count ? C.songInk : C.songCard,
+        fontSize: 13,
+        fontStyle: 'sans',
+        pressed: this._pressedBtn === 'complete',
       });
-      if (doneCount >= m.count) {
+      ctx.restore();
+      if (doneCount >= count) {
         ctx.save();
-        ctx.shadowColor = C.gold;
-        ctx.shadowBlur = 6 + Math.sin(this._timer * 4) * 4;
-        ctx.strokeStyle = C.goldLight;
-        ctx.lineWidth = 1;
-        roundRect(ctx, bx + 1.5, by + 1.5, 97, m.progH + 5, 5);
-        ctx.stroke();
+        ctx.fillStyle = C.songGold;
+        ctx.globalAlpha = 0.3 + Math.sin(this._timer * 3) * 0.15;
+        ctx.font = fs(w, 7) + 'px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('✦ 可圆满完成 ✦', bx + btnW / 2, btnY + btnH + 2);
         ctx.restore();
       }
     }
+
+    this._todoMetrics = {
+      todoX: todoX, todoW: todoW, todoEnd: titleY - 6 + cardH,
+      count: count, itemStart: itemStart, itemH: itemH,
+      progY: progY, progH: progH, btnY: btnY, btnH: btnH,
+    };
   }
 
-  _drawCalendar(ctx, w, p) {
-    var calY = this._getTodoMetrics(w).calY;
+  _drawCalendarGrid(ctx, w, p) {
+    var startY = (this._todoMetrics ? this._todoMetrics.todoEnd : 240) + 6;
     var h = this.sm.canvas.height;
-    var navEnd = h - 54;
-    var availH = navEnd - calY;
-    if (availH < 60) return calY + 10;
+    var navY = h - 60;
+    var availH = navY - startY - 8;
+    if (availH < 40) return;
 
     var cols = 7;
     var rows = Math.ceil(TOTAL_DAYS / cols);
-    var gap = 2;
-    var cellW = Math.max(14, Math.floor((w - 36 - gap * (cols - 1)) / cols));
-    var cellH = Math.max(12, Math.floor((availH - 30) / rows) - gap);
-    var cellSize = Math.min(cellW, cellH, 36);
+    var gap = 1.5;
+    var cellSize = Math.floor(Math.min((w - 32 - gap * (cols - 1)) / cols, 36, (availH - 20) / rows - gap));
     var totalW = cols * cellSize + (cols - 1) * gap;
-    var ox = Math.max(8, (w - totalW) / 2);
-    var hdrY = calY + 2;
-
-    // title
-    ctx.fillStyle = C.ink;
-    ctx.font = 'bold ' + fs(w, 11) + 'px "SimSun", "KaiTi", serif';
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'top';
-    ctx.fillText('修行日历', 18, calY);
-    var tuW = fs(w, 11) * 4 + 4;
-    var g2 = ctx.createLinearGradient(0, calY + 14, tuW, calY + 14);
-    g2.addColorStop(0, 'rgba(44,44,44,0.12)');
-    g2.addColorStop(0.5, 'rgba(44,44,44,0.08)');
-    g2.addColorStop(1, 'rgba(44,44,44,0)');
-    ctx.strokeStyle = g2;
-    ctx.lineWidth = 0.8;
-    ctx.beginPath();
-    ctx.moveTo(18, calY + 14);
-    ctx.lineTo(18 + tuW, calY + 14);
-    ctx.stroke();
+    var ox = (w - totalW) / 2;
 
     var startDateObj = p.startDate ? new Date(p.startDate) : new Date();
     var now = new Date();
     var msSinceStart = now.getTime() - startDateObj.getTime();
     var daysSinceStart = Math.max(0, Math.floor(msSinceStart / 86400000));
     var realTodayDayNum = daysSinceStart + 1;
+    var hist = p.history || [];
 
+    // Weekday headers
     for (var d = 0; d < cols; d++) {
       var hx = ox + d * (cellSize + gap) + cellSize / 2;
-      ctx.fillStyle = (d === 0 || d === 6) ? C.redLight : C.inkMuted;
-      ctx.font = 'bold ' + fs(w, 9) + 'px sans-serif';
+      ctx.fillStyle = (d === 0 || d === 6) ? C.songMutedRed : C.songInkLight;
+      ctx.font = 'bold ' + fs(w, 7) + 'px sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'top';
-      ctx.fillText(WEEKDAYS[d], hx, hdrY);
+      ctx.fillText(WEEKDAYS[d], hx, startY);
     }
 
-    var gridY = hdrY + 12;
-    var clipH = rows * (cellSize + gap) + 4;
+    var gridY = startY + 10;
+    var clipH = rows * (cellSize + gap);
     ctx.save();
-    roundRect(ctx, ox - 2, gridY - 2, totalW + 4, clipH, 4);
+    ctx.beginPath();
+    roundRect(ctx, ox, gridY - 2, totalW, clipH + 4, 4);
     ctx.clip();
-
-    var hist = p.history || [];
 
     for (var day = 1; day <= TOTAL_DAYS; day++) {
       var cellDate = new Date(startDateObj.getTime() + (day - 1) * 86400000);
       var dow = cellDate.getDay();
       var week = Math.floor((startDateObj.getDay() + day - 1) / cols);
-
       var cx = ox + dow * (cellSize + gap);
       var cy = gridY + week * (cellSize + gap);
 
-      var cellDone = false;
-      var cellFailed = false;
-      var cellStars = 0;
+      var cellDone = false, cellFailed = false, cellStars = 0;
       for (var k = 0; k < hist.length; k++) {
         if (hist[k].day === day) {
-          if (!hist[k].failed) {
-            cellDone = true;
-            cellStars = hist[k].stars || 0;
-          } else {
-            cellFailed = true;
-          }
+          if (!hist[k].failed) { cellDone = true; cellStars = hist[k].stars || 0; }
+          else { cellFailed = true; }
           break;
         }
       }
@@ -733,154 +749,129 @@ export class HomeScene {
       var isToday = day === realTodayDayNum && !p.completedToday;
       var isFuture = day > realTodayDayNum;
       var isSkipped = isPast && !cellDone && !cellFailed;
+      var pulseA = 0.06 + Math.sin(this._timer * 3 + day) * 0.03;
 
-      var pulseA = 0.08 + Math.sin(this._timer * 3 + day) * 0.04;
       roundRect(ctx, cx, cy, cellSize, cellSize, 2);
       if (isToday) {
-        ctx.fillStyle = 'rgba(194,53,49,' + pulseA + ')';
-      } else if (isFuture) {
-        ctx.fillStyle = 'rgba(44,44,44,0.03)';
+        ctx.fillStyle = 'rgba(196,96,74,' + pulseA + ')';
       } else if (cellDone) {
-        if (cellStars >= 3) ctx.fillStyle = C.jade;
-        else if (cellStars >= 2) ctx.fillStyle = C.goldLight;
-        else ctx.fillStyle = C.gold;
+        ctx.fillStyle = cellStars >= 3 ? C.jadeLight : (cellStars >= 2 ? C.songGold : C.goldLight);
       } else if (cellFailed) {
-        ctx.fillStyle = 'rgba(194,53,49,0.08)';
+        ctx.fillStyle = 'rgba(196,96,74,0.06)';
       } else if (isSkipped) {
-        ctx.fillStyle = 'rgba(44,44,44,0.05)';
+        ctx.fillStyle = 'rgba(60,45,30,0.03)';
       } else {
-        ctx.fillStyle = 'rgba(44,44,44,0.03)';
+        ctx.fillStyle = 'rgba(60,45,30,0.02)';
       }
       ctx.fill();
 
-      // border/glow
       if (isToday) {
         ctx.save();
-        ctx.shadowColor = 'rgba(194,53,49,0.5)';
-        ctx.shadowBlur = 8 + Math.sin(this._timer * 3) * 4;
-        ctx.strokeStyle = C.red;
-        ctx.lineWidth = 1.5;
+        ctx.shadowColor = 'rgba(196,96,74,0.3)';
+        ctx.shadowBlur = 4 + Math.sin(this._timer * 3) * 2;
+        ctx.strokeStyle = C.songMutedRed;
+        ctx.lineWidth = 1;
         roundRect(ctx, cx + 0.5, cy + 0.5, cellSize - 1, cellSize - 1, 2);
         ctx.stroke();
         ctx.restore();
       } else {
-        ctx.strokeStyle = cellDone ? 'rgba(92,140,90,0.15)' : 'rgba(44,44,44,0.05)';
+        ctx.strokeStyle = cellDone ? 'rgba(92,140,90,0.1)' : 'rgba(60,45,30,0.03)';
         ctx.lineWidth = 0.3;
         roundRect(ctx, cx + 0.5, cy + 0.5, cellSize - 1, cellSize - 1, 2);
         ctx.stroke();
       }
 
-      // realm marker dot
-      for (var r = 0; r < REALMS.length; r++) {
-        if (REALMS[r].reqDays === day && day > 0) {
-          ctx.fillStyle = REALMS[r].color;
-          ctx.beginPath();
-          ctx.arc(cx + cellSize - 3, cy + cellSize - 3, 2.5, 0, Math.PI * 2);
-          ctx.fill();
-          if (p.realm >= r) {
-            ctx.strokeStyle = C.white;
-            ctx.lineWidth = 0.5;
-            ctx.stroke();
-          }
-        }
-      }
-
-      // real date label (month/day)
+      // Date text
       var month = cellDate.getMonth() + 1;
       var dateNum = cellDate.getDate();
-      var dateStr = month + '/' + dateNum;
-
-      if (cellSize >= 26) {
-        ctx.fillStyle = isToday ? C.red : (isFuture ? C.inkMuted : C.ink);
-        ctx.font = 'bold ' + fs(w, 7) + 'px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(dateStr, cx + cellSize / 2, cy + cellSize / 2 - 3);
-        ctx.fillStyle = isToday ? C.redLight : C.inkMuted;
-        ctx.font = fs(w, 5) + 'px sans-serif';
-        var dayLabel = 'D' + day;
-        ctx.fillText(dayLabel, cx + cellSize / 2, cy + cellSize / 2 + 6);
-      } else {
-        ctx.fillStyle = isToday ? C.red : (isFuture ? C.inkMuted : C.ink);
-        ctx.font = fs(w, 7) + 'px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(dateStr, cx + cellSize / 2, cy + cellSize / 2);
-      }
-
-      // star for completed
-      if (cellDone && cellSize >= 18) {
-        ctx.fillStyle = C.goldLight;
-        ctx.font = fs(w, 4) + 'px sans-serif';
-        ctx.textAlign = 'left';
-        ctx.textBaseline = 'top';
-        ctx.fillText('★', cx + 1, cy + 1);
-      }
+      ctx.fillStyle = isToday ? C.songMutedRed : (isFuture ? C.songInkLight : C.songInk);
+      ctx.font = 'bold ' + fs(w, 6) + 'px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(month + '/' + dateNum, cx + cellSize / 2, cy + cellSize / 2);
     }
 
     ctx.restore();
+  }
 
-    var legY = gridY + clipH + 2;
-    ctx.font = fs(w, 6) + 'px sans-serif';
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'top';
-    var legItems = [
-      { label: '完成', color: C.jade },
-      { label: '星级', color: C.gold },
-      { label: '今日', color: C.red },
-      { label: '境界', color: C.purple },
-    ];
-    var lx = 18;
-    for (var li = 0; li < legItems.length; li++) {
-      ctx.fillStyle = legItems[li].color;
-      roundRect(ctx, lx, legY + 1, 5, 5, 1);
-      ctx.fill();
-      ctx.fillStyle = C.inkMuted;
-      ctx.fillText(legItems[li].label, lx + 7, legY);
-      lx += 12 + legItems[li].label.length * 7;
+  _handleAction(action, p) {
+    switch (action) {
+      case 'story':
+        this.sm.transitionTo(STATUS.STORY, { player: p });
+        break;
+      case 'adventure':
+        this.sm.transitionTo(STATUS.ADVENTURE, { player: p });
+        break;
+      case 'minigame':
+        this.sm.transitionTo(STATUS.MINIGAME, { player: p });
+        break;
+      case 'history':
+        this.sm.transitionTo(STATUS.HISTORY, { player: p });
+        break;
     }
-    return legY + 10;
   }
 
   _drawStats(ctx, w, h, p) {
     if (!this._showStats) return;
 
     ctx.save();
-    ctx.fillStyle = 'rgba(44,44,44,0.45)';
+    ctx.fillStyle = 'rgba(60,45,30,0.45)';
     ctx.fillRect(0, 0, w, h);
 
     var pw = Math.min(280, w - 40);
     var ph = Math.min(340, h - 60);
     var px = (w - pw) / 2;
     var py = (h - ph) / 2;
-    drawPaperCard(ctx, px, py, pw, ph, 14, { accent: C.gold, innerGlow: true, shadowBlur: 16 });
+    drawSongCard(ctx, px, py, pw, ph, 10, { bgColor: C.songCard, shadow: true });
 
-    ctx.fillStyle = C.ink;
-    ctx.font = 'bold ' + fs(w, 18) + 'px "SimSun", "KaiTi", serif';
+    ctx.fillStyle = C.songInk;
+    ctx.font = getFont(w, 16, 'song');
     ctx.textAlign = 'center';
     ctx.textBaseline = 'top';
     ctx.fillText('江湖属性', w / 2, py + 14);
 
-    var ly = py + 48;
+    // Gold divider beneath title
+    ctx.save();
+    var dg = ctx.createLinearGradient(px + 20, py + 42, px + pw - 20, py + 42);
+    dg.addColorStop(0, 'rgba(189,148,64,0)');
+    dg.addColorStop(0.15, 'rgba(189,148,64,0.3)');
+    dg.addColorStop(0.5, 'rgba(189,148,64,0.5)');
+    dg.addColorStop(0.85, 'rgba(189,148,64,0.3)');
+    dg.addColorStop(1, 'rgba(189,148,64,0)');
+    ctx.strokeStyle = dg;
+    ctx.lineWidth = 0.5;
+    ctx.beginPath();
+    ctx.moveTo(px + 20, py + 42);
+    ctx.lineTo(px + pw - 20, py + 42);
+    ctx.stroke();
+    ctx.restore();
+
+    var ly = py + 52;
     var keys = Object.keys(STAT_LABELS);
     var half = Math.ceil(keys.length / 2);
     var colW = (pw - 40) / 2;
 
+    // Subtle card for each stat row
     for (var i = 0; i < keys.length; i++) {
       var col = i < half ? 0 : 1;
       var row2 = i < half ? i : i - half;
       var sx = px + 16 + col * (colW + 8);
-      var sy = ly + row2 * 36;
+      var sy = ly + row2 * 38 + 2;
 
-      ctx.fillStyle = C.inkLight;
-      ctx.font = fs(w, 12) + 'px "SimSun", "KaiTi", serif';
+      // Subtle background card
+      roundRect(ctx, sx - 4, sy - 2, colW + 8, 32, 4);
+      ctx.fillStyle = 'rgba(245,239,224,0.3)';
+      ctx.fill();
+
+      var val = p.stats[keys[i]] || 1;
+      ctx.fillStyle = C.songInkLight;
+      ctx.font = getFont(w, 10, 'sans');
       ctx.textAlign = 'left';
       ctx.textBaseline = 'top';
       ctx.fillText(STAT_LABELS[keys[i]], sx, sy);
 
-      var val = p.stats[keys[i]] || 1;
       ctx.fillStyle = REALM_COLORS[Math.min(val, 5)];
-      ctx.font = 'bold ' + fs(w, 16) + 'px sans-serif';
+      ctx.font = 'bold ' + fs(w, 15) + 'px "PingFang SC", sans-serif';
       ctx.textAlign = 'right';
       ctx.fillText(val + '', sx + colW, sy);
 
@@ -888,7 +879,7 @@ export class HomeScene {
       var by = sy + 20;
       var bw3 = colW;
       roundRect(ctx, bx, by, bw3, 6, 3);
-      ctx.fillStyle = 'rgba(44,44,44,0.06)';
+      ctx.fillStyle = 'rgba(60,45,30,0.06)';
       ctx.fill();
       var fr = Math.min(1, val / 20);
       if (fr > 0.01) {
@@ -899,46 +890,45 @@ export class HomeScene {
     }
 
     ly += half * 36 + 10;
-    ctx.fillStyle = C.ink;
-    ctx.font = fs(w, 12) + 'px "SimSun", "KaiTi", serif';
+    ctx.fillStyle = C.songInk;
+    ctx.font = getFont(w, 11, 'sans');
     ctx.textAlign = 'left';
-    ctx.fillText('连续修行: ' + p.streak + '天', px + 16, ly); ly += 20;
-    ctx.fillText('总获星数: ' + p.totalStars, px + 16, ly); ly += 20;
+    ctx.fillText('连续修行: ' + p.streak + '天', px + 16, ly); ly += 18;
+    ctx.fillText('总获星数: ' + p.totalStars, px + 16, ly); ly += 18;
     ctx.fillText('当前境界: ' + p.realmName, px + 16, ly);
 
-    ctx.fillStyle = C.inkMuted;
-    ctx.font = fs(w, 10) + 'px sans-serif';
+    ctx.fillStyle = C.songInkLight;
+    ctx.font = getFont(w, 9, 'sans');
     ctx.textAlign = 'center';
     ctx.fillText('点击任意处关闭', w / 2, py + ph - 14);
+
+    // Decorative bottom line
+    ctx.save();
+    var bg2 = ctx.createLinearGradient(px + 30, py + ph - 18, px + pw - 30, py + ph - 18);
+    bg2.addColorStop(0, 'rgba(60,45,30,0)');
+    bg2.addColorStop(0.5, 'rgba(60,45,30,0.06)');
+    bg2.addColorStop(1, 'rgba(60,45,30,0)');
+    ctx.strokeStyle = bg2;
+    ctx.lineWidth = 0.3;
+    ctx.beginPath();
+    ctx.moveTo(px + 30, py + ph - 18);
+    ctx.lineTo(px + pw - 30, py + ph - 18);
+    ctx.stroke();
+    ctx.restore();
 
     ctx.restore();
   }
 
-  _drawNav(ctx) {
-    var w = ctx.canvas.width;
-    for (var i = 0; i < this._buttons.length; i++) {
-      var b = this._buttons[i];
-      var btnColor = b.color || C.zhuSha;
-      var isSpecial = (b.action === 'stats') || (b.action === 'cultivation');
-      drawGuofengBtn(ctx, b.x, b.y, b.w, b.h, b.text, {
-        bgColor: btnColor,
-        fontSize: 12,
-        doubleBorder: isSpecial,
-        cornerDecor: isSpecial,
-      });
-    }
-  }
-
   handleTap(x, y) {
+    var w = this.sm.canvas.width;
+    var p = this.player;
+
     if (this._showStats) {
       this._showStats = false;
       return;
     }
 
-    var w = this.sm.canvas.width;
-    var p = this.player;
-
-    // pet hit - start drag
+    // Pet hit - start drag
     var petCX = this._petX;
     var petCY = this._petY;
     if (x >= petCX - 20 && x <= petCX + 20 && y >= petCY - 20 && y <= petCY + 20) {
@@ -951,22 +941,28 @@ export class HomeScene {
       return;
     }
 
-    var m = this._getTodoMetrics(w);
-
-    // Tap on "今日修行" section title to open ChallengeScene
-    if (!p.completedToday && !this._dayComplete) {
-      if (y >= m.titleY && y <= m.titleY + 16 && x >= 18 && x <= w - 18) {
-        if (this.sm.audio) this.sm.audio.playTap();
-        this.sm.transitionTo(STATUS.CULTIVATION, { player: p });
+    // Bottom nav buttons
+    for (var bi = 0; bi < this._buttons.length; bi++) {
+      var b = this._buttons[bi];
+      if (x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h) {
+        this._pressedBtn = 'nav_' + b.action;
+        if (b.action === 'stats') {
+          this._showStats = !this._showStats;
+        } else {
+          if (this.sm.audio) this.sm.audio.playTap();
+          this._handleAction(b.action, p);
+        }
         return;
       }
     }
 
-    // Tap on todo items
-    if (!p.completedToday && !this._dayComplete) {
+    // Todo section
+    var m = this._todoMetrics;
+    if (m && !p.completedToday && !this._dayComplete) {
+      // Tap on todo items
       for (var i = 0; i < m.count; i++) {
         var iy = m.itemStart + i * m.itemH;
-        if (x >= 18 && x <= w - 18 && y >= iy && y <= iy + m.itemH) {
+        if (x >= m.todoX && x <= m.todoX + m.todoW && y >= iy && y <= iy + m.itemH) {
           if (!this._todoDone[i]) {
             this._completeTodo(i);
           }
@@ -974,31 +970,21 @@ export class HomeScene {
         }
       }
 
-      // Tap "完成修行" button
+      // Complete button
       var doneCount = 0;
       for (var j = 0; j < m.count; j++) { if (this._todoDone[j]) doneCount++; }
       if (doneCount > 0) {
-        var bx = w - 18 - 88;
-        var by = m.progY - 1;
-        if (x >= bx && x <= bx + 88 && y >= by && y <= by + m.progH + 6) {
+        var btnW = doneCount >= m.count ? 100 : 84;
+        var bx = m.todoX + m.todoW - btnW - 10;
+        if (x >= bx && x <= bx + btnW && y >= m.btnY && y <= m.btnY + m.btnH) {
+          this._pressedBtn = 'complete';
           this._finishDay(p);
           return;
         }
       }
     }
 
-    // Nav buttons
-    for (var k = 0; k < this._buttons.length; k++) {
-      var b = this._buttons[k];
-      if (x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h) {
-        if (b.action === 'stats') {
-          this._showStats = !this._showStats;
-          return;
-        }
-        this._handleAction(b.action, p);
-        return;
-      }
-    }
+
   }
 
   handleDrag(x, y) {
@@ -1055,9 +1041,9 @@ export class HomeScene {
     this.player.petAffection = (this.player.petAffection || 0) + 1;
 
     // floating stat text
-    var m2 = this._getTodoMetrics(this.sm.canvas.width);
+    var m2 = this._todoMetrics;
     var ftX = this.sm.canvas.width * 0.3;
-    var ftY = m2.itemStart + i * m2.itemH;
+    var ftY = m2 ? (m2.itemStart + i * m2.itemH) : 120;
     var xf = XINFA_LIST[i];
     var statLabel = STAT_LABELS[xf.stat] || xf.stat;
     var statColors = {
@@ -1160,21 +1146,5 @@ export class HomeScene {
     }
   }
 
-  _handleAction(action, p) {
-    switch (action) {
-      case 'story':
-        this.sm.transitionTo(STATUS.STORY, { player: p });
-        break;
-      case 'adventure':
-        this.sm.transitionTo(STATUS.ADVENTURE, { player: p });
-        break;
-      case 'minigame':
-        if (this.sm.audio) this.sm.audio.playTap();
-        this.sm.transitionTo(STATUS.MINIGAME, { player: p });
-        break;
-      case 'history':
-        this.sm.transitionTo(STATUS.HISTORY, { player: p });
-        break;
-    }
-  }
+
 }
