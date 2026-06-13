@@ -23,6 +23,8 @@ export var C = {
   shadow: 'rgba(60,45,30,0.10)',
   shadowHeavy: 'rgba(60,45,30,0.20)',
   white: '#FFFEF8',
+  orange: '#E88A3A',
+  orangeLight: '#F0A860',
 
   // Guofeng palette
   qingDai: '#1B3B6F',

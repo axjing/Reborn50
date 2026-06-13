@@ -1,4 +1,4 @@
-import { STATUS, TOTAL_DAYS, REALMS, XINFA_LIST, SCENES_CONFIG, STAT_LABELS } from '../utils/constants.js';
+import { STATUS, TOTAL_DAYS, REALMS, XINFA_LIST, SCENES_CONFIG, STAT_LABELS, CALENDAR_RANGES, ATTEMPT_COLORS, CALENDAR_STATE } from '../utils/constants.js';
 import {
   C, roundRect, fs,
   drawMountain, drawMist, drawSparkle, drawStars, drawTree,
@@ -16,6 +16,11 @@ var STAR_TEXTS = ['☆', '★'];
 var WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六'];
 var TODO_ICONS = ['☀', '❄', '⚔', '📖', '⚙', '🥗', '✦'];
 var ENCOURAGE_MSGS = ['太棒了！', '继续加油！', '好厉害！', '加油！', '真不错！', '有进步！', '棒极了！', '厉害了！', '做得好！'];
+
+function _todayStr() {
+  var d = new Date();
+  return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate();
+}
 
 export class HomeScene {
   constructor(sm) {
@@ -43,6 +48,9 @@ export class HomeScene {
     this._sceneTimer = 0;
     this._birdPositions = [];
     this._pressedBtn = null;
+    this._calendarScrollY = 0;
+    this._calendarTouchStartY = -1;
+    this._calendarGridMetrics = null;
   }
 
   onEnter(data) {
@@ -66,7 +74,11 @@ export class HomeScene {
           this.player.startDate = Date.now();
         }
       }
-      if (StorageManager.checkNewDay(this.player)) {
+      var dayResult = StorageManager.checkNewDay(this.player);
+      if (dayResult.status === 'interrupted') {
+        this._toast = '修行中断！第 ' + dayResult.interruptedDay + ' 天未完成，重新开始。';
+        this._toastT = 3;
+      } else if (dayResult.status === 'new') {
         this._toast = '新的一天，继续你的修行之路';
         this._toastT = 2;
       }
@@ -691,6 +703,160 @@ export class HomeScene {
     };
   }
 
+  _buildCalendarEntries(p) {
+    var today = new Date();
+    today.setHours(0, 0, 0, 0);
+    var todayStr = today.getFullYear() + '-' + (today.getMonth() + 1) + '-' + today.getDate();
+
+    var startDateStr = '';
+    if (p.startDate) {
+      if (typeof p.startDate === 'number') {
+        var sd2 = new Date(p.startDate);
+        startDateStr = sd2.getFullYear() + '-' + (sd2.getMonth() + 1) + '-' + sd2.getDate();
+      } else {
+        startDateStr = p.startDate;
+      }
+    }
+
+    var rangeMonths = p.calendarRange || 6;
+    var earliestDate;
+    if (rangeMonths === 0) {
+      earliestDate = new Date(864e13);
+      var allAttempts = (p.attempts || []).concat([{
+        startDate: startDateStr,
+        endDate: todayStr,
+      }]);
+      for (var ai = 0; ai < allAttempts.length; ai++) {
+        var as = allAttempts[ai].startDate;
+        if (as) {
+          var ad = new Date(as);
+          if (ad < earliestDate) earliestDate = ad;
+        }
+      }
+      if (earliestDate.getTime() === 864e13) earliestDate = new Date();
+    } else {
+      earliestDate = new Date(today.getFullYear(), today.getMonth() - rangeMonths + 1, 1);
+      if (earliestDate > today) earliestDate = new Date(today.getFullYear(), 0, 1);
+    }
+
+    var firstGridDay = new Date(earliestDate);
+    firstGridDay.setDate(firstGridDay.getDate() - firstGridDay.getDay());
+
+    var entries = [];
+    var hist = p.history || [];
+    var missed = p.missedDays || [];
+
+    function dateStr(d) {
+      return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate();
+    }
+
+    var cursor = new Date(firstGridDay);
+    while (cursor <= today) {
+      var ds = dateStr(cursor);
+      var dow = cursor.getDay();
+
+      var state = CALENDAR_STATE.EMPTY;
+      var attemptDay = 0;
+      var attemptNum = 0;
+      var stars = 0;
+
+      var isToday = ds === todayStr;
+
+      var foundCompleted = false;
+      for (var hi = 0; hi < hist.length; hi++) {
+        if (hist[hi].dateStr === ds && !hist[hi].failed) {
+          foundCompleted = true;
+          attemptDay = hist[hi].day;
+          attemptNum = hist[hi].attempt || 0;
+          stars = hist[hi].stars || 0;
+          state = isToday ? CALENDAR_STATE.TODAY_DONE : CALENDAR_STATE.COMPLETED;
+          break;
+        }
+      }
+
+      if (foundCompleted) {
+        // already set
+      }
+
+      // Check if this date is an interruption point (end of an interrupted attempt)
+      if (state !== CALENDAR_STATE.COMPLETED && state !== CALENDAR_STATE.TODAY_DONE) {
+        for (var ai3 = 0; ai3 < (p.attempts || []).length; ai3++) {
+          var aa = p.attempts[ai3];
+          if (aa.reason === 'interrupted' && aa.endDate === ds) {
+            state = CALENDAR_STATE.INTERRUPTION;
+            attemptNum = aa.attempt;
+            attemptDay = aa.completedDays;
+            break;
+          }
+        }
+      }
+
+      if (state === CALENDAR_STATE.INTERRUPTION) {
+        // already set above
+      } else if (isToday) {
+        state = p.completedToday ? CALENDAR_STATE.TODAY_DONE : CALENDAR_STATE.TODAY_UNDONE;
+        attemptDay = p.day;
+        attemptNum = p.currentAttempt;
+      } else {
+        var inAnyAttempt = false;
+        var curDateNum = cursor.getTime();
+        var attempts = p.attempts || [];
+        for (var ai2 = 0; ai2 < attempts.length; ai2++) {
+          var a = attempts[ai2];
+          var aStart = new Date(a.startDate);
+          var aEnd = new Date(a.endDate);
+          aEnd.setHours(23, 59, 59, 999);
+          if (curDateNum >= aStart.getTime() && curDateNum <= aEnd.getTime()) {
+            inAnyAttempt = true;
+            attemptNum = a.attempt;
+            var diff = Math.round((curDateNum - aStart.getTime()) / 86400000);
+            attemptDay = diff + 1;
+            break;
+          }
+        }
+        if (!inAnyAttempt && startDateStr) {
+          var curStart = new Date(startDateStr);
+          if (curDateNum >= curStart.getTime()) {
+            inAnyAttempt = true;
+            attemptNum = p.currentAttempt;
+            var diff2 = Math.round((curDateNum - curStart.getTime()) / 86400000);
+            attemptDay = diff2 + 1;
+          }
+        }
+
+        if (inAnyAttempt) {
+          var foundMissed = false;
+          for (var mi = 0; mi < missed.length; mi++) {
+            if (missed[mi].dateStr === ds) {
+              foundMissed = true;
+              attemptDay = missed[mi].day;
+              attemptNum = missed[mi].attempt || attemptNum;
+              break;
+            }
+          }
+          state = CALENDAR_STATE.MISSED;
+        }
+      }
+
+      entries.push({
+        date: new Date(cursor),
+        dateStr: ds,
+        dayOfMonth: cursor.getDate(),
+        month: cursor.getMonth(),
+        year: cursor.getFullYear(),
+        dayOfWeek: dow,
+        state: state,
+        attemptDay: attemptDay,
+        attemptNum: attemptNum,
+        stars: stars,
+      });
+
+      cursor.setDate(cursor.getDate() + 1);
+    }
+
+    return entries;
+  }
+
   _drawCalendarGrid(ctx, w, p) {
     var m = this._todoMetrics;
     var startY = (m ? m.todoEnd : 240) + 6;
@@ -700,31 +866,32 @@ export class HomeScene {
     if (availH < 40) return;
 
     var cols = 7;
-    var rows = Math.ceil(TOTAL_DAYS / cols);
     var gap = 1.5;
-    var titleH = 14;
-    var headerH = 12;
-    var overhead = titleH + 6 + headerH;
-    var cellSize = Math.floor(Math.min((w - 32 - gap * (cols - 1)) / cols, 36, (availH - overhead - 6) / rows - gap));
+    var maxTotalW = w - 20;
+    var cellSize = Math.floor(Math.min(36, (maxTotalW - (cols - 1) * gap) / cols));
+    if (cellSize < 20) cellSize = 20;
     var totalW = cols * cellSize + (cols - 1) * gap;
     var ox = (w - totalW) / 2;
     var todoX = m ? m.todoX : ox;
     var titleY = startY;
+    var titleH = 14;
+    var rangePillH = 18;
+    var headerH = 12;
 
-    // "修行日历" title aligned with todo title
+    // Title
     ctx.fillStyle = C.songInk;
     ctx.font = getFont(w, 13, 'song');
     ctx.textAlign = 'left';
     ctx.textBaseline = 'top';
     ctx.fillText('修行日历', todoX + 12, titleY);
 
-    // Right-aligned day counter
+    // Counter
     ctx.fillStyle = C.songInkLight;
     ctx.font = getFont(w, 8, 'sans');
     ctx.textAlign = 'right';
     ctx.fillText(p.completedDays + '/' + TOTAL_DAYS + '天', todoX + (m ? m.todoW : totalW + 12) - 12, titleY + 2);
 
-    // Subtle underline for title
+    // Underline
     ctx.save();
     ctx.strokeStyle = 'rgba(60,45,30,0.06)';
     ctx.lineWidth = 0.5;
@@ -734,17 +901,56 @@ export class HomeScene {
     ctx.stroke();
     ctx.restore();
 
-    var headerY = titleY + titleH + 6;
+    // Range pills
+    var rangePillY = titleY + 22;
+    var pillGap = 6;
+    var pillMargin = 3;
+    var totalPillW = 0;
+    for (var ri = 0; ri < CALENDAR_RANGES.length; ri++) {
+      totalPillW += CALENDAR_RANGES[ri].label.length * 8 + 14;
+    }
+    totalPillW += (CALENDAR_RANGES.length - 1) * pillGap;
+    var pillStartX = (w - totalPillW) / 2;
+    this._calendarPillRects = [];
 
-    // Weekday headers with subtle rounded pill
+    for (var ri2 = 0; ri2 < CALENDAR_RANGES.length; ri2++) {
+      var rg = CALENDAR_RANGES[ri2];
+      var pw = rg.label.length * 8 + 14;
+      var ph = rangePillH;
+      var px2 = pillStartX + ri2 * (pw + pillGap);
+      var active = (p.calendarRange === rg.value);
+      roundRect(ctx, px2, rangePillY, pw, ph, ph / 2);
+      if (active) {
+        ctx.fillStyle = C.ink;
+        ctx.globalAlpha = 0.12;
+        ctx.fill();
+        ctx.globalAlpha = 1;
+      }
+      ctx.strokeStyle = active ? C.ink : C.inkMuted;
+      ctx.globalAlpha = active ? 0.25 : 0.12;
+      ctx.lineWidth = 0.5;
+      roundRect(ctx, px2 + 0.5, rangePillY + 0.5, pw - 1, ph - 1, ph / 2);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+
+      ctx.fillStyle = active ? C.ink : C.inkMuted;
+      ctx.font = fs(w, 8) + 'px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(rg.label, px2 + pw / 2, rangePillY + ph / 2);
+
+      this._calendarPillRects.push({ x: px2, y: rangePillY, w: pw, h: ph, value: rg.value });
+    }
+
+    var headerY = rangePillY + rangePillH + 2;
+
+    // Weekday header pills
     for (var d = 0; d < cols; d++) {
       var hx = ox + d * (cellSize + gap) + cellSize / 2;
       var hw = cellSize - 6;
-      var hr = 4;
-      roundRect(ctx, hx - hw / 2, headerY + 1, hw, headerH - 2, hr);
+      roundRect(ctx, hx - hw / 2, headerY + 1, hw, headerH - 2, 4);
       ctx.fillStyle = 'rgba(60,45,30,0.03)';
       ctx.fill();
-
       ctx.fillStyle = (d === 0 || d === 6) ? C.songMutedRed : C.songInkLight;
       ctx.font = getFont(w, 7, 'sans');
       ctx.textAlign = 'center';
@@ -752,80 +958,84 @@ export class HomeScene {
       ctx.fillText(WEEKDAYS[d], hx, headerY + headerH / 2);
     }
 
-    var gridY = headerY + headerH + 1;
-    var clipH = rows * (cellSize + gap);
+    var gridY = headerY + headerH + 2;
+    var viewportH = navY - 8 - gridY;
+    if (viewportH < 20) return;
+
+    // Build calendar entries from start boundary to today
+    var entries = this._buildCalendarEntries(p);
+    var numWeeks = Math.ceil(entries.length / cols);
+    var totalGridH = numWeeks * (cellSize + gap);
+    var maxScroll = Math.max(0, totalGridH - viewportH);
+    this._calendarScrollY = Math.max(0, Math.min(this._calendarScrollY, maxScroll));
+
+    this._calendarGridMetrics = {
+      ox: ox, gridY: gridY, cellSize: cellSize, gap: gap,
+      cols: cols, viewportH: viewportH, maxScroll: maxScroll,
+      totalGridH: totalGridH, entries: entries,
+    };
+
+    // Clip to grid viewport
     ctx.save();
     ctx.beginPath();
-    roundRect(ctx, ox - 2, gridY - 2, totalW + 4, clipH + 4, 4);
+    roundRect(ctx, ox - 2, gridY - 2, totalW + 4, viewportH + 4, 4);
     ctx.clip();
 
-    // Weekly horizontal dividers (subtle)
-    for (var wk = 0; wk <= rows; wk++) {
-      var wy = gridY + wk * (cellSize + gap) - gap / 2;
-      ctx.strokeStyle = 'rgba(60,45,30,0.04)';
-      ctx.lineWidth = 0.3;
-      ctx.beginPath();
-      ctx.moveTo(ox + 4, wy);
-      ctx.lineTo(ox + totalW - 4, wy);
-      ctx.stroke();
-    }
+    var scrollOff = this._calendarScrollY;
 
-    var startDateObj = p.startDate ? new Date(p.startDate) : new Date();
-    var now = new Date();
-    var msSinceStart = now.getTime() - startDateObj.getTime();
-    var daysSinceStart = Math.max(0, Math.floor(msSinceStart / 86400000));
-    var realTodayDayNum = daysSinceStart + 1;
-    var hist = p.history || [];
+    // Collect month boundaries for labels
+    var monthLabels = [];
+    var lastMonth = -1;
 
-    for (var day = 1; day <= TOTAL_DAYS; day++) {
-      var cellDate = new Date(startDateObj.getTime() + (day - 1) * 86400000);
-      var dow = cellDate.getDay();
-      var week = Math.floor((startDateObj.getDay() + day - 1) / cols);
-      var cx = ox + dow * (cellSize + gap);
-      var cy = gridY + week * (cellSize + gap);
+    for (var ei = 0; ei < entries.length; ei++) {
+      var ent = entries[ei];
+      var week = Math.floor(ei / cols);
+      var weekY = gridY + week * (cellSize + gap) - scrollOff;
+      if (weekY + cellSize < gridY) continue;
+      if (weekY > gridY + viewportH) break;
 
-      var cellDone = false, cellFailed = false, cellStars = 0;
-      for (var k = 0; k < hist.length; k++) {
-        if (hist[k].day === day) {
-          if (!hist[k].failed) { cellDone = true; cellStars = hist[k].stars || 0; }
-          else { cellFailed = true; }
-          break;
-        }
+      var cx = ox + ent.dayOfWeek * (cellSize + gap);
+      var cy = weekY;
+
+      // Month label at month boundary (first day of month, or first entry)
+      if (ent.month !== lastMonth && ei > 0) {
+        monthLabels.push({ month: ent.month, year: ent.year, y: cy - gap / 2 });
       }
+      lastMonth = ent.month;
 
-      var isPast = day < realTodayDayNum;
-      var isToday = day === realTodayDayNum && !p.completedToday;
-      var isFuture = day > realTodayDayNum;
-      var isSkipped = isPast && !cellDone && !cellFailed;
-      var pulseA = 0.06 + Math.sin(this._timer * 3 + day) * 0.03;
-      var cornerR = Math.min(3, cellSize * 0.12);
+      var pulseA = 0.06 + Math.sin(this._timer * 3 + ei) * 0.03;
+      var cornerR = 3;
 
       // Cell background
       roundRect(ctx, cx + 0.5, cy + 0.5, cellSize - 1, cellSize - 1, cornerR);
-      if (isToday) {
-        ctx.fillStyle = 'rgba(196,96,74,' + pulseA + ')';
-      } else if (cellDone) {
-        ctx.fillStyle = cellStars >= 3 ? C.jadeLight : (cellStars >= 2 ? C.songGold : C.goldLight);
-      } else if (cellFailed) {
-        ctx.fillStyle = 'rgba(196,96,74,0.06)';
-      } else if (isSkipped) {
-        ctx.fillStyle = 'rgba(60,45,30,0.03)';
-      } else {
-        ctx.fillStyle = 'rgba(60,45,30,0.02)';
+
+      switch (ent.state) {
+        case CALENDAR_STATE.COMPLETED:
+        case CALENDAR_STATE.TODAY_DONE:
+          ctx.fillStyle = 'rgba(74,156,123,0.25)';
+          break;
+        case CALENDAR_STATE.TODAY_UNDONE:
+          ctx.fillStyle = 'rgba(212,160,74,' + pulseA + ')';
+          break;
+        case CALENDAR_STATE.MISSED:
+          ctx.fillStyle = 'rgba(232,138,58,0.12)';
+          break;
+        default:
+          ctx.fillStyle = 'rgba(60,45,30,0.02)';
       }
       ctx.fill();
 
       // Border
-      if (isToday) {
+      if (ent.state === CALENDAR_STATE.TODAY_UNDONE || ent.state === CALENDAR_STATE.TODAY_DONE) {
         ctx.save();
-        ctx.shadowColor = 'rgba(196,96,74,0.3)';
+        ctx.shadowColor = 'rgba(212,160,74,0.3)';
         ctx.shadowBlur = 4 + Math.sin(this._timer * 3) * 2;
-        ctx.strokeStyle = C.songMutedRed;
+        ctx.strokeStyle = C.gold;
         ctx.lineWidth = 1;
         roundRect(ctx, cx + 1, cy + 1, cellSize - 2, cellSize - 2, Math.max(cornerR - 0.5, 1));
         ctx.stroke();
         ctx.restore();
-      } else if (cellDone) {
+      } else if (ent.state === CALENDAR_STATE.COMPLETED) {
         ctx.strokeStyle = C.jade;
         ctx.lineWidth = 0.5;
         ctx.globalAlpha = 0.15;
@@ -839,40 +1049,92 @@ export class HomeScene {
         ctx.stroke();
       }
 
-      // Day number (1-50) - primary text
-      var dayNumSize = cellSize >= 30 ? fs(w, 10) : fs(w, 8);
-      ctx.fillStyle = isToday ? C.songMutedRed : (cellDone ? C.ink : (isFuture ? C.songInkLight : C.songInk));
-      ctx.font = 'bold ' + dayNumSize + 'px "PingFang SC", sans-serif';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(day + '', cx + cellSize / 2, cy + cellSize / 2 - (cellSize >= 30 ? 4 : 0));
+      // Real date (day of month) - prominent, top-left
+      ctx.fillStyle = C.ink;
+      ctx.font = 'bold ' + fs(w, 11) + 'px "PingFang SC", sans-serif';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'top';
+      ctx.fillText(ent.dayOfMonth + '', cx + 2, cy + 2);
 
-      // Month/day label below number (smaller)
-      if (cellSize >= 28) {
-        var month = cellDate.getMonth() + 1;
-        var dateNum = cellDate.getDate();
-        ctx.fillStyle = 'rgba(60,45,30,0.3)';
-        ctx.font = fs(w, 6) + 'px "PingFang SC", sans-serif';
-        ctx.fillText(month + '/' + dateNum, cx + cellSize / 2, cy + cellSize / 2 + (cellSize >= 30 ? 6 : 4));
-      }
-
-      // Star indicator for 3-star days
-      if (cellDone && cellStars >= 3) {
-        ctx.fillStyle = C.songGold;
-        ctx.font = fs(w, 6) + 'px sans-serif';
-        ctx.textAlign = 'right';
-        ctx.textBaseline = 'top';
-        ctx.fillText('★', cx + cellSize - 2, cy + 1);
-      }
-
-      // Small dot for completed-but-not-perfect days
-      if (cellDone && cellStars < 3 && cellStars > 0) {
-        ctx.fillStyle = cellStars >= 2 ? C.songGold : C.goldLight;
-        ctx.globalAlpha = 0.5;
+      // Attempt dot + day number - bottom-right
+      if (ent.attemptDay > 0) {
+        var dotColor = ATTEMPT_COLORS[(ent.attemptNum - 1) % ATTEMPT_COLORS.length];
+        if (ent.state === CALENDAR_STATE.MISSED) dotColor = C.orange;
+        var dotR = 2.5;
+        ctx.fillStyle = dotColor;
+        ctx.globalAlpha = 0.7;
         ctx.beginPath();
-        ctx.arc(cx + cellSize - 3, cy + 3, 1.5, 0, Math.PI * 2);
+        ctx.arc(cx + cellSize - 4 - dotR - 1, cy + cellSize - 5, dotR, 0, Math.PI * 2);
         ctx.fill();
         ctx.globalAlpha = 1;
+
+        ctx.fillStyle = C.inkMuted;
+        ctx.font = fs(w, 6) + 'px "PingFang SC", sans-serif';
+        ctx.textAlign = 'right';
+        ctx.textBaseline = 'bottom';
+        ctx.fillText(ent.attemptDay + '', cx + cellSize - 3, cy + cellSize - 2);
+      }
+
+      // Star for completed
+      if (ent.state === CALENDAR_STATE.COMPLETED || ent.state === CALENDAR_STATE.TODAY_DONE) {
+        if (ent.stars >= 3) {
+          ctx.fillStyle = C.songGold;
+          ctx.font = fs(w, 7) + 'px sans-serif';
+          ctx.textAlign = 'right';
+          ctx.textBaseline = 'bottom';
+          ctx.fillText('★', cx + cellSize - 2, cy + cellSize - 2);
+        } else {
+          ctx.fillStyle = C.songGold;
+          ctx.globalAlpha = 0.4;
+          ctx.beginPath();
+          ctx.arc(cx + cellSize - 4, cy + cellSize - 4, 1.5, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.globalAlpha = 1;
+        }
+      }
+
+      // Interruption line: draw between rows where one attempt ends and next begins
+      if (ei > 0) {
+        var prev = entries[ei - 1];
+        if (prev.attemptNum > 0 && ent.attemptNum > 0 && prev.attemptNum !== ent.attemptNum) {
+          ctx.save();
+          ctx.strokeStyle = C.red;
+          ctx.globalAlpha = 0.35;
+          ctx.lineWidth = 1;
+          ctx.setLineDash([3, 3]);
+          ctx.beginPath();
+          ctx.moveTo(ox + 4, cy - gap / 2);
+          ctx.lineTo(ox + totalW - 4, cy - gap / 2);
+          ctx.stroke();
+          ctx.setLineDash([]);
+          ctx.globalAlpha = 1;
+
+          // X marker
+          ctx.fillStyle = C.red;
+          ctx.globalAlpha = 0.5;
+          ctx.font = fs(w, 9) + 'px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText('✕', ox + totalW / 2, cy - gap / 2);
+          ctx.globalAlpha = 1;
+          ctx.restore();
+        }
+      }
+    }
+
+    // Month labels (drawn after grid, in the margin)
+    for (var mi2 = 0; mi2 < monthLabels.length; mi2++) {
+      var ml = monthLabels[mi2];
+      var ly = ml.y - scrollOff;
+      if (ly >= gridY && ly <= gridY + viewportH) {
+        ctx.save();
+        ctx.fillStyle = C.ink;
+        ctx.globalAlpha = 0.08;
+        ctx.font = 'bold ' + fs(w, 10) + 'px "PingFang SC", sans-serif';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'top';
+        ctx.fillText(ml.year + '年' + (ml.month + 1) + '月', ox + 2, ly - 10);
+        ctx.restore();
       }
     }
 
@@ -1013,7 +1275,21 @@ export class HomeScene {
       return;
     }
 
-    // Pet hit - start drag
+    // Calendar range pills
+    if (this._calendarPillRects) {
+      for (var pri = 0; pri < this._calendarPillRects.length; pri++) {
+        var pr = this._calendarPillRects[pri];
+        if (x >= pr.x && x <= pr.x + pr.w && y >= pr.y && y <= pr.y + pr.h) {
+          if (p.calendarRange !== pr.value) {
+            p.calendarRange = pr.value;
+            StorageManager.save(p);
+          }
+          return;
+        }
+      }
+    }
+
+    // Pet hit - start drag (check before calendar so pet stays interactive)
     var petCX = this._petX;
     var petCY = this._petY;
     if (x >= petCX - 20 && x <= petCX + 20 && y >= petCY - 20 && y <= petCY + 20) {
@@ -1024,6 +1300,16 @@ export class HomeScene {
       this._petDragOffY = petCY - y;
       this._pet.setState('drag');
       return;
+    }
+
+    // Calendar grid touch start (for scroll)
+    var cgm = this._calendarGridMetrics;
+    if (cgm) {
+      if (x >= cgm.ox && x <= cgm.ox + cgm.cols * (cgm.cellSize + cgm.gap) &&
+          y >= cgm.gridY && y <= cgm.gridY + cgm.viewportH) {
+        this._calendarTouchStartY = y;
+        return;
+      }
     }
 
     // Bottom nav buttons
@@ -1068,11 +1354,20 @@ export class HomeScene {
         }
       }
     }
-
-
   }
 
   handleDrag(x, y) {
+    if (this._calendarTouchStartY >= 0) {
+      var dy = y - this._calendarTouchStartY;
+      if (Math.abs(dy) > 3) {
+        var cgm = this._calendarGridMetrics;
+        if (cgm) {
+          this._calendarScrollY = Math.max(0, Math.min(cgm.maxScroll, this._calendarScrollY - dy));
+        }
+        this._calendarTouchStartY = y;
+      }
+      return;
+    }
     if (!this._isDraggingPet) return;
     var prevX = this._petX;
     var prevY = this._petY;
@@ -1092,6 +1387,7 @@ export class HomeScene {
   }
 
   handleDragEnd(x, y) {
+    this._calendarTouchStartY = -1;
     if (!this._isDraggingPet) return;
     this._isDraggingPet = false;
     var dx = x - this._dragStartX;
@@ -1105,6 +1401,15 @@ export class HomeScene {
       if (this.sm.audio) this.sm.audio.playTap();
     } else {
       this._pet.setState('idle');
+    }
+  }
+
+  handleWheel(dx, dy) {
+    if (this._calendarGridMetrics) {
+      this._calendarScrollY = Math.max(0, Math.min(
+        this._calendarGridMetrics.maxScroll,
+        this._calendarScrollY + dy * 36
+      ));
     }
   }
 
@@ -1205,6 +1510,17 @@ export class HomeScene {
     var skinUpgraded = this._pet.addGrowth(7);
     this._pet.saveToPlayer(p);
     StorageManager.save(p);
+
+    // WeChat Game Center cloud storage (daily reminder badge)
+    try {
+      wx.setUserCloudStorage({
+        KVDataList: [
+          { key: 'day', value: String(p.completedDays) },
+          { key: 'streak', value: String(p.streak) },
+          { key: 'lastActive', value: _todayStr() },
+        ],
+      });
+    } catch (_) {}
 
     // Skin upgrade toast (takes priority)
     if (skinUpgraded && this._pet.skinInfo) {

@@ -1,4 +1,4 @@
-import { STORAGE_KEY, SAVE_VERSION } from '../utils/constants.js';
+import { STORAGE_KEY, SAVE_VERSION, TOTAL_DAYS } from '../utils/constants.js';
 import { Player } from '../entities/Player.js';
 import { ACHIEVEMENTS } from '../data/achievements.js';
 
@@ -11,6 +11,7 @@ export class StorageManager {
       lastActiveDate: _todayStr(),
     };
     wx.setStorageSync(STORAGE_KEY, data);
+    player.lastActiveDate = _todayStr();
   }
 
   static load() {
@@ -18,9 +19,13 @@ export class StorageManager {
       var raw = wx.getStorageSync(STORAGE_KEY);
       if (!raw) return null;
       if (raw.version !== SAVE_VERSION) {
-        return _migrate(raw);
+        var migrated = _migrate(raw);
+        if (!migrated) return null;
+        return migrated;
       }
-      return new Player(raw.player);
+      var p = new Player(raw.player);
+      p.lastActiveDate = raw.lastActiveDate || '';
+      return p;
     } catch (e) {
       return null;
     }
@@ -28,16 +33,37 @@ export class StorageManager {
 
   static checkNewDay(player) {
     var raw = wx.getStorageSync(STORAGE_KEY);
-    if (!raw) return false;
-    var lastDate = raw.lastActiveDate;
+    if (!raw) return { status: false };
+    var lastDate = raw.lastActiveDate || player.lastActiveDate || '';
     var today = _todayStr();
-    if (lastDate !== today) {
-      player.completedToday = false;
-      player.completedRules = [];
+
+    if (lastDate === today) return { status: false };
+
+    var gap = _daysBetween(lastDate, today);
+
+    if (gap > 1 && player.day < TOTAL_DAYS && player.day > 0) {
+      var interruptedDay = player.day;
+      var missed = [];
+      var d = _dateFromStr(lastDate);
+      d.setDate(d.getDate() + 1);
+      var end = new Date();
+      end.setHours(0, 0, 0, 0);
+      while (d < end) {
+        var ds = d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate();
+        missed.push({ dateStr: ds, day: interruptedDay, attempt: player.currentAttempt });
+        d.setDate(d.getDate() + 1);
+      }
+      player.missedDays = (player.missedDays || []).concat(missed);
+
+      player.resetDay(true);
       StorageManager.save(player);
-      return true;
+      return { status: 'interrupted', gap: gap, interruptedDay: interruptedDay };
     }
-    return false;
+
+    player.completedToday = false;
+    player.completedRules = [];
+    StorageManager.save(player);
+    return { status: 'new' };
   }
 
   static checkAchievements(player) {
@@ -73,9 +99,25 @@ function _todayStr() {
   return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate();
 }
 
+function _dateFromStr(s) {
+  if (!s) return new Date();
+  var parts = s.split('-');
+  return new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+}
+
+function _daysBetween(a, b) {
+  var da = _dateFromStr(a);
+  var db = _dateFromStr(b);
+  da.setHours(0, 0, 0, 0);
+  db.setHours(0, 0, 0, 0);
+  return Math.round((db - da) / 86400000);
+}
+
 function _migrate(raw) {
-  if (raw.version === 2 && raw.player) {
-    var p = raw.player;
+  var p = raw.player;
+  if (!p) return null;
+
+  if (raw.version === 2) {
     p.achievements = p.achievements || [];
     p.adventures = p.adventures || [];
     p.chapterProgress = p.chapterProgress || 1;
@@ -84,7 +126,20 @@ function _migrate(raw) {
     p.totalStars = p.totalStars || 0;
     p.nickname = p.nickname || '修行者';
     p.avatar = p.avatar || '';
-    return new Player(p);
+    raw.version = 3;
   }
-  return null;
+
+  if (raw.version === 3) {
+    p.attempts = p.attempts || [];
+    p.currentAttempt = p.currentAttempt || 1;
+    p.missedDays = p.missedDays || [];
+    p.calendarRange = p.calendarRange || 6;
+    raw.version = 4;
+  }
+
+  if (raw.version !== SAVE_VERSION) return null;
+
+  var player = new Player(p);
+  player.lastActiveDate = raw.lastActiveDate || '';
+  return player;
 }

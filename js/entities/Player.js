@@ -1,6 +1,11 @@
-import { XINFA_LIST } from '../utils/constants.js';
+import { XINFA_LIST, TOTAL_DAYS } from '../utils/constants.js';
 
 var BASE_STATS = { zhenqi: 1, xinjing: 1, tipo: 1, xueshi: 1, gongli: 1, qingqi: 1, dunwu: 1 };
+
+function _todayStr() {
+  var d = new Date();
+  return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate();
+}
 
 export class Player {
   constructor(data) {
@@ -29,6 +34,12 @@ export class Player {
     this.petAffection = data.petAffection || 0;
     this.petGrowth = data.petGrowth || 0;
     this.petSkinTier = data.petSkinTier || 0;
+
+    this.attempts = data.attempts || [];
+    this.currentAttempt = data.currentAttempt || 1;
+    this.missedDays = data.missedDays || [];
+    this.lastActiveDate = data.lastActiveDate || '';
+    this.calendarRange = data.calendarRange || 6;
   }
 
   get realm() {
@@ -86,6 +97,8 @@ export class Player {
     var record = {
       day: this.day,
       timestamp: Date.now(),
+      dateStr: _todayStr(),
+      attempt: this.currentAttempt,
       completedRules: [...this.completedRules],
       stats: { ...this.stats },
       streak: this.streak + 1,
@@ -101,23 +114,56 @@ export class Player {
     this.stars = stars;
     this.completedRules = [];
     this.completedToday = true;
+
+    if (this.day > TOTAL_DAYS) {
+      this.attempts.push({
+        attempt: this.currentAttempt,
+        startDate: this.startDate,
+        endDate: _todayStr(),
+        reason: 'completed',
+        completedDays: TOTAL_DAYS,
+      });
+    }
+
     return this.checkLevelUp();
   }
 
-  resetDay() {
+  resetDay(interruption) {
+    var today = _todayStr();
+    var yesterday = '';
+    {
+      var d = new Date();
+      d.setDate(d.getDate() - 1);
+      yesterday = d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate();
+    }
+
+    if (this.day > 1 || this.attempts.length > 0) {
+      this.attempts.push({
+        attempt: this.currentAttempt,
+        startDate: this.startDate,
+        endDate: yesterday,
+        reason: interruption ? 'interrupted' : 'completed',
+        completedDays: Math.max(0, this.day - 1),
+      });
+    }
+
     var record = {
       day: this.day,
       timestamp: Date.now(),
+      dateStr: today,
+      attempt: this.currentAttempt,
       completedRules: [...this.completedRules],
       failed: true,
       streak: 0,
     };
     this.history.push(record);
+    this.currentAttempt++;
     this.day = 1;
     this.streak = 0;
     this.totalResets++;
     this.completedRules = [];
     this.completedToday = false;
+    this.startDate = today;
     Object.keys(BASE_STATS).forEach(function(k) {
       this.stats[k] = Math.max(1, (this.stats[k] || 1) - 1);
     }.bind(this));
@@ -186,6 +232,11 @@ export class Player {
       petAffection: this.petAffection,
       petGrowth: this.petGrowth,
       petSkinTier: this.petSkinTier,
+      attempts: this.attempts,
+      currentAttempt: this.currentAttempt,
+      missedDays: this.missedDays,
+      lastActiveDate: this.lastActiveDate,
+      calendarRange: this.calendarRange,
     };
   }
 }

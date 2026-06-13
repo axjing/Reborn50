@@ -2,7 +2,7 @@ export const DESIGN_WIDTH = 375;
 export const DESIGN_HEIGHT = 667;
 
 export const STORAGE_KEY = 'reborn50_save';
-export const SAVE_VERSION = 3;
+export const SAVE_VERSION = 4;
 
 export const TOTAL_DAYS = 50;
 export const MAX_STAT = 999;
@@ -112,3 +112,24 @@ export const STAT_LABELS = {
 };
 
 export const STAT_ICONS = ['☀', '❄', '⚔', '📖', '⚙', '🥗', '✦'];
+
+export const CALENDAR_RANGES = [
+  { value: 3, label: '3月' },
+  { value: 6, label: '6月' },
+  { value: 0, label: '全部' },
+];
+
+export const ATTEMPT_COLORS = [
+  '#4A9C7B', '#D4A04A', '#7B6BB5', '#E8836B', '#4A8DB5', '#55AA88',
+];
+
+export const CALENDAR_STATE = {
+  NONE: 0,
+  COMPLETED: 1,
+  MISSED: 2,
+  TODAY_UNDONE: 3,
+  TODAY_DONE: 4,
+  INTERRUPTION: 5,
+  FUTURE: 6,
+  EMPTY: 7,
+};

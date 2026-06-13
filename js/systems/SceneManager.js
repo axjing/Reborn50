@@ -101,4 +101,11 @@ export class SceneManager {
       this.currentScene.handleDragEnd(x, y);
     }
   }
+
+  handleWheel(dx, dy) {
+    if (this._transition) return;
+    if (this.currentScene && this.currentScene.handleWheel) {
+      this.currentScene.handleWheel(dx, dy);
+    }
+  }
 }
